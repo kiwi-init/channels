@@ -494,6 +494,11 @@ export function cursor(
   const roomOf = shown<number, string>(from?.roomOf);
   const placeOf = shown<number, Place>(from?.placeOf);
   const lineLeft: [number, number][] = [];
+  const lastEnds = (ends: [number, number][]): Map<number, number> => {
+    const last = new Map<number, number>();
+    for (const [id, when] of ends) last.set(id, Math.max(when, last.get(id) ?? when));
+    return last;
+  };
   const leftLine: LeftLine = (q, when) => {
     if (q.task !== undefined) lineLeft.push([q.task, when]);
   };
@@ -600,7 +605,7 @@ export function cursor(
   };
   const rollLine = (at: number): void => {
     const view = clockView();
-    for (const [id, when] of lineLeft.splice(0)) {
+    for (const [id, when] of lastEnds(lineLeft.splice(0))) {
       const t = tasks.get(id);
       if (t) roll(view, t, when, when);
     }
@@ -1252,7 +1257,7 @@ export function cursor(
     }
     let tasksOwned = v.own;
     const view: ClockView = { ...clockView(), tasks: v.tasks, leases: v.leases };
-    for (const [id, when] of left) {
+    for (const [id, when] of lastEnds(left)) {
       const t = v.tasks.get(id);
       const clock = t && rolled(view, t, when, when);
       if (!t || clock === t.clock) continue;

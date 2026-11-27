@@ -976,13 +976,10 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
 
     case "lease.take": {
       const blocks = ev.task === undefined ? undefined : c.tasks.get(ev.task);
-      if (ev.task !== undefined && (!blocks || blocks.state === "done" || blocks.archived)) {
-        reject(`no open task ${taskId(ev.task)} for a lock wait`);
-        break;
-      }
+      const task = blocks && blocks.state !== "done" && !blocks.archived ? blocks.id : undefined;
       let lease = c.leases.get(ev.name);
       if (!lease) c.leases.set(ev.name, (lease = { name: ev.name, since: at, until: at, queue: [] }));
-      take(lease, m.from, ev.ttl * 1000, at, ev.note, ev.task, c.leftLine);
+      take(lease, m.from, ev.ttl * 1000, at, ev.note, task, c.leftLine);
       break;
     }
 

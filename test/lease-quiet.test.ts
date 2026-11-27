@@ -25,6 +25,9 @@ const doing = (): Message[] => [event(TASK, 0, "jow", { op: "task.add", title: "
 const take = (seq: number, at: number, from: string, ttlMin: number, task?: number): Message =>
   event(seq, at, from, { op: "lease.take", name: "build", ttl: ttlMin * 60, ...(task !== undefined ? { task } : {}) });
 const free = (seq: number, at: number, from: string): Message => event(seq, at, from, { op: "lease.free", name: "build" });
+const takeOn = (name: string, seq: number, at: number, from: string, ttlMin: number, task?: number): Message =>
+  event(seq, at, from, { op: "lease.take", name, ttl: ttlMin * 60, ...(task !== undefined ? { task } : {}) });
+const olderReader = (ms: Message[]): Message[] => ms.map((m) => (m.ev?.op === "lease.take" && m.ev.task !== undefined ? { ...m, ev: { op: "lease.take", name: m.ev.name, ttl: m.ev.ttl } } : m));
 
 const queued = (): Message[] => [...doing(), take(5, 5 * MIN, "mac", 60), take(6, JOINED, "win", 30, TASK)];
 
@@ -122,15 +125,27 @@ describe("a lock wait recorded on a task (T19510)", () => {
     expect(clockOf(state, state.tasks.get(TASK)!, now)).toMatchObject({ since: gaveUp, paged: true });
   });
 
-  test("the live fold agrees with a whole fold across the wait and its end", () => {
+  test("the live fold: a release batch refolds, and time and chat alone resume the clock where a whole fold does", () => {
     const left = 25 * MIN;
     const ms = [...queued(), free(7, left, "win")];
-    const live = folded(ms.slice(0, 6), roster, JOINED + MIN);
-    const during = live.next([], JOINED + QUIET_MS + MIN)!;
-    expect(nudgesDue(during, JOINED + QUIET_MS + MIN)).toEqual([]);
+    const release = ms.findIndex((m) => m.ev?.op === "lease.free");
+    expect(release).toBe(ms.length - 1);
+    const live = folded(ms.slice(0, release), roster, JOINED + MIN);
+    expect(nudgesDue(live.next([], JOINED + QUIET_MS + MIN)!, JOINED + QUIET_MS + MIN)).toEqual([]);
+    expect(live.next(ms.slice(release), left + MIN)).toBeNull();
     const now = left + QUIET_MS + MIN;
-    const after = live.next(ms.slice(6), now)!;
-    expect(clockOf(after, after.tasks.get(TASK)!, now)).toEqual(clockOf(foldAt(ms, now), foldAt(ms, now).tasks.get(TASK)!, now));
+    const refolded = folded(ms, roster, left + MIN).next([], now)!;
+    expect(clockOf(refolded, refolded.tasks.get(TASK)!, now)).toMatchObject({ since: left, paged: true });
+
+    const ranOut = 5 * MIN + HOUR;
+    const byTime = folded(queued(), roster, JOINED + MIN);
+    const chat = { v: 1, id: "m9", seq: 9, from: "jow", pk: "pk-jow", sigOk: true, kind: "msg", body: "how's it going?", ts: ranOut + MIN, rts: ranOut + MIN } as Message;
+    const later = ranOut + QUIET_MS + MIN;
+    const chatted = byTime.next([chat], later)!;
+    expect(chatted.leases.get("build")).toMatchObject({ holder: "win", since: ranOut });
+    expect(clockOf(chatted, chatted.tasks.get(TASK)!, later)).toMatchObject({ since: ranOut, paged: true });
+    const whole = foldAt([...queued(), chat], later);
+    expect(clockOf(chatted, chatted.tasks.get(TASK)!, later)).toEqual(clockOf(whole, whole.tasks.get(TASK)!, later));
   });
 
   test("a fold resumed from a snapshot base taken mid-wait agrees with the whole log", () => {
@@ -148,11 +163,50 @@ describe("a lock wait recorded on a task (T19510)", () => {
     expect(clockOf(resumed, resumed.tasks.get(TASK)!, now)).toMatchObject({ since: left, paged: true });
   });
 
-  test("a wait that names a closed or missing task is refused", () => {
-    const ms = [...doing(), take(5, 5 * MIN, "mac", 60), take(6, JOINED, "win", 30, 99)];
-    const state = foldAt(ms, JOINED + MIN);
-    expect(state.rejected.get(6)).toBe("no open task T99 for a lock wait");
-    expect(state.leases.get("build")?.queue).toEqual([]);
+  test("a take naming a task that closed or never was keeps its place, with no task on it, as an older reader folds it", () => {
+    const closed = [...doing(), event(3, 2_000, "win", { op: "task.update", task: TASK, state: "done" })];
+    const holderFirst = [...closed, take(5, 5 * MIN, "mac", 60, TASK), take(6, JOINED, "win", 30)];
+    const queuedSecond = [...closed, take(5, 5 * MIN, "win", 60), take(6, JOINED, "mac", 30, TASK), take(7, JOINED + MIN, "owl", 30, 99)];
+    const now = JOINED + 2 * MIN;
+    expect(foldAt(closed, now).tasks.get(TASK)?.state).toBe("done");
+    for (const ms of [holderFirst, queuedSecond]) {
+      const state = foldAt(ms, now);
+      expect(state.rejected.size).toBe(0);
+      expect(state.leases).toEqual(foldAt(olderReader(ms), now).leases);
+      expect(state.leases.get("build")?.queue.every((q) => q.task === undefined)).toBe(true);
+    }
+    expect(foldAt(holderFirst, now).leases.get("build")).toMatchObject({ holder: "mac", queue: [expect.objectContaining({ name: "win" })] });
+    expect(
+      foldAt(queuedSecond, now)
+        .leases.get("build")
+        ?.queue.map((q) => q.name),
+    ).toEqual(["mac", "owl"]);
+  });
+
+  describe("one task waiting on two locks resumes when the last wait ends", () => {
+    const buildEnds = 5 * MIN + HOUR;
+    const deployEnds = 5 * MIN + 97 * MIN;
+    const holders = { build: takeOn("build", 5, 5 * MIN, "mac", 60), deploy: takeOn("deploy", 6, 5 * MIN, "owl", 97) };
+    const waits = [takeOn("build", 7, JOINED, "win", 30, TASK), takeOn("deploy", 8, JOINED + MIN, "win", 30, TASK)];
+    const orders = { "build first": [...doing(), holders.build, holders.deploy, ...waits], "deploy first": [...doing(), holders.deploy, holders.build, ...waits] };
+    const now = deployEnds + 3 * MIN;
+    for (const [order, ms] of Object.entries(orders)) {
+      test(`${order}: full, incremental and snapshot folds all resume at the second wait's end`, () => {
+        expect(buildEnds).toBeLessThan(deployEnds);
+        expect(dueFor(ms, deployEnds - MIN)).toEqual([]);
+        const whole = foldAt(ms, now);
+        expect(whole.leases.get("deploy")).toMatchObject({ holder: "win", since: deployEnds });
+        const live = folded(ms, roster, JOINED + 2 * MIN);
+        expect(nudgesDue(live.next([], buildEnds + QUIET_MS + MIN)!, buildEnds + QUIET_MS + MIN)).toEqual([]);
+        const incremental = live.next([], now)!;
+        let base: FoldBase | null = null;
+        fold(ms, roster, JOINED + 2 * MIN, null, null, null, (b) => {
+          base = b;
+        });
+        const resumed = fold(ms, roster, now, null, null, base);
+        for (const state of [whole, incremental, resumed]) expect(clockOf(state, state.tasks.get(TASK)!, now)).toMatchObject({ since: deployEnds, paged: true });
+      });
+    }
   });
 
   test("the task is checked on the wire", () => {
