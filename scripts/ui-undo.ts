@@ -120,6 +120,46 @@ try {
   await press(page, "Control+z");
   expect((await valueOf(page, COMPOSER)) === "", "undo after a send never reaches the sent message or older text", await valueOf(page, COMPOSER));
 
+  await composer.fill("");
+  await page.waitForTimeout(PAUSE);
+  await typeSlow(page, "saved draft");
+  await press(page, "Control+s");
+  await page.waitForTimeout(300);
+  await typeSlow(page, "sent message");
+  await press(page, "Enter");
+  await page.waitForTimeout(400);
+  await press(page, "Control+Shift+s");
+  await page.waitForTimeout(300);
+  const restored = await valueOf(page, COMPOSER);
+  expect(restored === "saved draft", "Ctrl+Shift+S brings the put-away draft back after a send", restored);
+  await press(page, "Control+z");
+  const afterRestore = await valueOf(page, COMPOSER);
+  expect(!afterRestore.includes("sent message"), "Ctrl+Z after a send and a restored draft never shows the sent message", afterRestore);
+
+  const email = await page.evaluate(() => {
+    const el = document.createElement("input");
+    el.type = "email";
+    el.id = "undo-email";
+    const w = window as unknown as { emailInputs: number };
+    w.emailInputs = 0;
+    el.addEventListener("input", () => void w.emailInputs++);
+    document.body.append(el);
+    el.focus();
+    return document.activeElement === el;
+  });
+  expect(email, "a plain email input takes focus");
+  await page.waitForTimeout(PAUSE);
+  await typeSlow(page, "me@example.org");
+  const inputsTyped = await page.evaluate(() => (window as unknown as { emailInputs: number }).emailInputs);
+  await press(page, "Control+z");
+  const emailBack = await page.evaluate(() => ({ value: document.querySelector<HTMLInputElement>("#undo-email")?.value, inputs: (window as unknown as { emailInputs: number }).emailInputs }));
+  expect(emailBack.value === "" && emailBack.inputs === inputsTyped + 1, "Ctrl+Z in an email input empties it and tells the page with one input event", JSON.stringify(emailBack));
+  await press(page, "Control+Shift+z");
+  const emailForward = await page.evaluate(() => ({ value: document.querySelector<HTMLInputElement>("#undo-email")?.value, inputs: (window as unknown as { emailInputs: number }).emailInputs }));
+  expect(emailForward.value === "me@example.org" && emailForward.inputs === inputsTyped + 2, "Ctrl+Shift+Z in an email input brings it back with one more input event", JSON.stringify(emailForward));
+  await page.evaluate(() => document.querySelector("#undo-email")?.remove());
+  await composer.fill("");
+
   await page.evaluate((sel) => {
     const el = document.querySelector<HTMLTextAreaElement>(sel);
     el?.focus();

@@ -24,6 +24,7 @@ import { withNames } from "~/chat/linked"
 import { listId, useSuggest } from "~/chat/suggest"
 import { wordsRaw } from "~/words"
 import { keysHint } from "~/kit/keys"
+import { forgetUndo } from "~/kit/undo"
 
 const Gifs = lazy(() => import("~/chat/gif-picker"))
 const StashList = lazy(() => import("~/chat/stash-list"))
@@ -159,6 +160,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
       running.command.run(running.args)
       setCue(null)
       update("")
+      forgetUndo(area.current)
       return
     }
     if (reading > 0) {
@@ -187,6 +189,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     setFiles([])
     setCue(null)
     update("")
+    forgetUndo(area.current)
   }
   const sendQueued = useEffectEvent(() => {
     const value = queued.current
@@ -202,6 +205,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     if (!text.trim()) return
     stash.add(text)
     update("")
+    forgetUndo(area.current)
     setCue({ key, back: false, left: stash.list.length + 1 })
   }
   const bringBack = (i: number) => {

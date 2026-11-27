@@ -29,6 +29,10 @@ function keep(el: Box, h: History): void {
   histories.set(el, byDraft)
 }
 
+export function forgetUndo(el: Box | null): void {
+  if (el) histories.get(el)?.delete(draftOf(el))
+}
+
 function settle(el: Box): void {
   const kept = histories.get(el)?.get(draftOf(el))
   if (kept) keep(el, settled(kept, snap(el)))
@@ -37,7 +41,7 @@ function settle(el: Box): void {
 function write(el: Box, to: Snap, type: "historyUndo" | "historyRedo"): void {
   const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
   Object.getOwnPropertyDescriptor(proto, "value")?.set?.call(el, to.value)
-  el.setSelectionRange(to.start, to.end)
+  if (el.selectionStart !== null) el.setSelectionRange(to.start, to.end)
   writing = true
   try {
     el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: type }))
