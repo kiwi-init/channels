@@ -60,6 +60,13 @@ const trustOnly = (what: string): string => `only the owner, or a person they fu
 const managesAgent = (holds: boolean, by: FoldMember, target: FoldMember | undefined): boolean =>
   holds && !by.owner && by.kind === "human" && !!target && target.kind === "agent" && !target.owner && target.name !== by.name;
 
+function assignRefusal(c: Pick<FoldCtx, "leads" | "onDuty">, member: FoldMember, from: string, owner: string | undefined, next: string | null | undefined): string | null {
+  if (!c.onDuty() || next === undefined || isPerson(member) || c.leads(member)) return null;
+  const to = next || undefined;
+  if (to === owner || to === from || owner === from) return null;
+  return to ? `only the lead on duty or a person gives a task to ${to}` : "only the lead on duty or a person takes a task off its owner";
+}
+
 export interface FoldCtx {
   members: Map<string, FoldMember>;
   signed: ReadonlySet<string>;
@@ -68,6 +75,7 @@ export interface FoldCtx {
   trusted: (pk: string, member: FoldMember) => boolean;
   powers: Map<string, Partial<Record<Power, boolean>>>;
   leads: (member: FoldMember) => boolean;
+  onDuty: () => boolean;
   keysByName: Map<string, Set<string>>;
   scopesByKey: Map<string, Scope[]>;
   scopeSets: Map<string, { seq: number; scopes: Scope[] }>;
@@ -592,7 +600,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "task.add": {
-      const addWrong = addResetRefusal(members, ev.review);
+      const addWrong = addResetRefusal(members, ev.review) ?? assignRefusal(c, member, m.from, undefined, ev.owner);
       if (addWrong) {
         reject(addWrong);
         break;
@@ -773,6 +781,11 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       }
       if (ev.detail !== undefined && !isPerson(member) && !lead) {
         reject(`only a person or the lead rewrites ${taskId(task.id)}'s body`);
+        break;
+      }
+      const assignWrong = assignRefusal(c, member, m.from, task.owner, ev.owner);
+      if (assignWrong) {
+        reject(assignWrong);
         break;
       }
       const review = ev.review === undefined ? task.review : ev.review?.trim() || undefined;

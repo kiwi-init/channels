@@ -52,6 +52,7 @@ export function stream(seed: number, length: number): Stream {
   const asks: Message[] = [];
   const perms: Message[] = [];
   const tasks: number[] = [];
+  let duty = 0;
   const times: number[] = [];
   let ts = T0;
   const base = (seq: number, from: string, over: Partial<Message>): Message => ({
@@ -107,7 +108,11 @@ export function stream(seed: number, length: number): Stream {
     } else if (roll < 0.865) m = event(seq, "jow", { op: "scope.set", member: "win", pk: WIN, scopes: r() < 0.5 ? ["post"] : ["post", "ask", "tasks", "facts"], wasLead: false });
     else if (roll < 0.875) m = event(seq, "jow", { op: "power.set", member: "pat", pk: PAT, power: pick(["answersDecisions", "addsAgents"] as const), on: r() < 0.5, was: false });
     else if (roll < 0.88) m = event(seq, "jow", { op: "member.gone", member: "ann", pk: ANN });
-    else m = base(seq, from, { body: `chat ${seq} for @${pick(EVERYONE)}` });
+    else if (roll < 0.885) m = event(seq, "jow", { op: "lead.standby", name: "win", on: r() < 0.7 });
+    else if (roll < 0.89) {
+      m = event(seq, pick(["jow", "win"]), { op: "lead.duty", to: pick(["win", "ann"]), from: r() < 0.7 ? duty : 0 });
+      duty = seq;
+    } else m = base(seq, from, { body: `chat ${seq} for @${pick(EVERYONE)}` });
     if (m.kind !== "event") chats.push(m);
     messages.push(m);
   }

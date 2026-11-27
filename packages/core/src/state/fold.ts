@@ -83,8 +83,10 @@ import type {
   Roster,
   SecretRoom,
   Spec,
+  Standby,
   Task,
   StepQuestion,
+  Duty,
 } from "./types.ts";
 import { inRoom } from "../room-rules.ts";
 import { packAuthors, unpackAuthors } from "./authors.ts";
@@ -223,6 +225,9 @@ interface Inner {
   ctx: FoldCtx;
   placesBefore: NonNullable<FoldBase["placesBefore"]>;
   specsOnly: ChannelStateDraft["specsOnly"];
+  duty: Duty | null;
+  standbys: ReadonlyMap<string, Standby>;
+  dutyLead: (home: string | null) => string | null;
   head: number;
   seen: Set<number>;
   forward: Set<number>;
@@ -357,12 +362,15 @@ export function cursor(
       if (held(member.pk, power)) member[power] = true;
       else delete member[power];
   }
+  let duty: Duty | null = from?.duty ?? null;
+  const standbys = new Map<string, Standby>(from?.standbys);
   const trusted = (pk: string, member: FoldMember): boolean => member.kind === "human" && !member.owner && canPost(scopesByKey.get(pk) ?? []) && POWERS.every((p) => held(pk, p));
   const logged = (member: FoldMember): boolean | undefined => {
     const lead = personaLead.get(member.name);
     return lead === "roster" ? undefined : lead;
   };
-  const leads = (member: FoldMember): boolean => member.owner || isLeadRole(member.role) || (logged(member) ?? (signed.has(member.name) && member.persona?.role === "lead"));
+  const leads = (member: FoldMember): boolean =>
+    duty ? member.owner || member.name === duty.lead : member.owner || isLeadRole(member.role) || (logged(member) ?? (signed.has(member.name) && member.persona?.role === "lead"));
   const scopesByKey = new Map<string, Scope[]>();
   for (const r of roster) scopesByKey.set(r.pk, scopesOf(r));
   for (const [pk, scopes] of from?.scopesByKey ?? []) scopesByKey.set(pk, scopes);
@@ -467,6 +475,7 @@ export function cursor(
     held,
     trusted,
     leads,
+    onDuty: () => duty !== null,
     keysByName,
     scopesByKey,
     scopeSets,
@@ -528,7 +537,9 @@ export function cursor(
     const who = members.get(name);
     return present(who) && !isPerson(who);
   };
-  const leadNow = (): string | null => leadOf(members, lead, signed, present);
+  const homeLead = (): string | null => leadOf(members, lead, signed, present);
+  const dutyLead = (home: string | null): string | null => (duty ? (present(members.get(duty.lead)) ? duty.lead : null) : home);
+  const leadNow = (): string | null => dutyLead(homeLead());
   const ownerHere = (): string | undefined => [...members.values()].find((x) => x.owner && x.active)?.name;
   const leadHere = (): string | undefined => leadNow() ?? ownerHere();
   const standsFor = (name: string): string | undefined => (present(members.get(name)) ? name : ownerHere());
@@ -837,6 +848,28 @@ export function cursor(
         else askHeads.set(head.id, { ...head, goal, goalBy: m.from });
         return;
       }
+      if (ev.op === "lead.standby") {
+        placeOf.set(m.seq, MAIN);
+        const target = members.get(ev.name);
+        if (!member.owner && !trusted(member.pk, member)) reject("only the owner or a person the owner trusts approves a standby lead");
+        else if (!ev.on) standbys.delete(ev.name);
+        else if (!present(target) || isPerson(target)) reject(`${ev.name} isn't an agent here`);
+        else standbys.set(ev.name, { since: m.seq, by: m.from });
+        return;
+      }
+      if (ev.op === "lead.duty") {
+        placeOf.set(m.seq, MAIN);
+        const current = duty?.since ?? 0;
+        const onDuty = leadNow();
+        const home = homeLead();
+        if (ev.from !== current) reject(`the lead on duty changed since you looked: hand over from the current assignment (${current ? `#${current}` : "the channel's own lead"})`);
+        else if (m.from !== onDuty && !member.owner && !trusted(member.pk, member)) reject("only the lead on duty, the owner or a person the owner trusts hands the lead over");
+        else if (ev.to !== home && !standbys.has(ev.to)) reject(`${ev.to} isn't an approved standby lead`);
+        else if (!present(members.get(ev.to))) reject(`${ev.to} isn't here`);
+        else if (ev.to === onDuty) reject(`${ev.to} is already the lead on duty`);
+        else duty = { lead: ev.to, since: m.seq, by: m.from };
+        return;
+      }
       if (ev.op === "specs.only.set") {
         placeOf.set(m.seq, MAIN);
         if (!member.owner) reject("only the owner says whether tasks come only from approved specs");
@@ -998,6 +1031,8 @@ export function cursor(
         askHeads: [...askHeads.values()].filter((h) => h.id > cut || filedUnder.has(h.id)),
         specs: keptSpecs,
         specsOnly,
+        duty,
+        standbys: [...standbys],
         checks: [...checks.values()],
         answered: openAsks.flatMap((m): [number, string[]][] => [[m.seq, [...(answered.get(m.seq) ?? [])]]]),
         threadOf: keptThreads,
@@ -1031,10 +1066,13 @@ export function cursor(
       askHeads,
       specs,
       specsOnly,
+      duty,
+      standbys: new Map(standbys),
+      homeLead: theLead ?? null,
       checks,
       threadOf,
       threadPeople,
-      lead: theLead ?? null,
+      lead: dutyLead(theLead ?? null),
       rooms,
       secret,
       roomOf,
@@ -1158,6 +1196,9 @@ export function cursor(
     ctx,
     placesBefore,
     specsOnly,
+    duty,
+    standbys,
+    dutyLead,
     head,
     seen,
     forward,
