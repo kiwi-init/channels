@@ -332,6 +332,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
           />
           <textarea
             ref={area}
+            data-undo={key}
             rows={1}
             value={text}
             aria-label={t("chat.composer.message")}
