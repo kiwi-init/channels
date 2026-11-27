@@ -4,7 +4,7 @@ import type { ChannelState } from "@kiwi/core/state.ts"
 import { same } from "@kiwi/core/state/same.ts"
 import { shownSame } from "~/words"
 
-export const PER_MESSAGE: ReadonlySet<string> = new Set(["head", "members", "trust", "threadOf", "threadPeople", "roomOf", "placeOf", "places", "askHeads", "rejected"])
+export const PER_MESSAGE: ReadonlySet<string> = new Set(["head", "members", "trust", "threadOf", "threadPeople", "roomOf", "placeOf", "places", "askHeads", "rejected", "chatBy"])
 
 export const SEAT_COUNTERS: ReadonlySet<string> = new Set(["lastSeen", "messages"])
 
