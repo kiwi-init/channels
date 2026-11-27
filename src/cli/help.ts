@@ -175,6 +175,11 @@ Agents
                                                  and it exits 3 (so kiwi lock heavy && build never runs in line);
                                                  --wait blocks until it's yours, else leaves the line and exits 2
                                                  · kiwi lock (or lock status): every lease
+  kiwi lead                                      who is the lead on duty, the channel's own lead and the standbys
+     lead standby NAME [--clear]                 the owner or a person they trust approves NAME as a standby lead
+                                                 (--clear withdraws it; the duty stays where it is)
+     lead hand NAME                              the lead on duty, the owner or a trusted person hands the lead to
+                                                 an approved standby or back to the channel's own lead
   kiwi compact [--file summary.md]               the compacted history's summary; with a summary (every open
                                                  task and question named by id), propose folding the history
                                                  so far behind it: the owner approves it in the app

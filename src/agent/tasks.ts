@@ -125,6 +125,25 @@ export class SessionTasks extends SessionMessaging {
     oneLook,
   );
 
+  readonly standbyLead = Effect.fn("AgentSession.standbyLead")(
+    { self: this },
+    function* (this: SessionTasks, name: string, on: boolean) {
+      const seq = yield* this.event({ op: "lead.standby", name, on }, on ? `approved ${name} as a standby lead` : `withdrew ${name}'s standby lead approval`);
+      return yield* this.confirm(seq);
+    },
+    oneLook,
+  );
+
+  readonly handLead = Effect.fn("AgentSession.handLead")(
+    { self: this },
+    function* (this: SessionTasks, to: string) {
+      const { state } = yield* this.state();
+      const seq = yield* this.event({ op: "lead.duty", to, from: state.duty?.since ?? 0 }, `handed the lead to ${to}`);
+      return yield* this.confirm(seq);
+    },
+    oneLook,
+  );
+
   readonly nameGoal = Effect.fn("AgentSession.nameGoal")(
     { self: this },
     function* (this: SessionTasks, ask: number, name: string | null) {
