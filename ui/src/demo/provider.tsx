@@ -195,6 +195,29 @@ function withTaskEvents(c: Channel): Channel {
   }
 }
 
+function withIdleAsk(c: Channel): Channel {
+  const at = Date.now() - 2 * 60_000
+  const text = "T9 is merged but not released yet. Ship it in today's release?"
+  const seq = Math.max(...c.messages.map((m) => m.seq)) + 1
+  return {
+    ...c,
+    messages: [...c.messages, { seq, from: "atlas", at, text: wrote(text), where: { kind: "room", room: "general" }, ask: "idle-1", mentionsYou: true }],
+    asks: [
+      {
+        kind: "question",
+        id: "idle-1",
+        from: "atlas",
+        at,
+        text: wrote(text),
+        label: "Decision for you",
+        options: ["A: ship it today", "B: wait for the next one"].map(wrote),
+        holds: [9],
+        idle: true,
+      },
+    ],
+  }
+}
+
 function withStep(c: Channel): Channel {
   const at = Date.now() - 30_000
   const text = "Remove commit signing from ~/.gitconfig-personal"
@@ -317,6 +340,7 @@ export type Scenario =
   | "compacted"
   | "long"
   | "step"
+  | "idle-ask"
   | "asked-of"
   | "left-out"
   | "events"
@@ -558,6 +582,7 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
     ].map((c) => [c.code, { ...c, docs: demoDocs(c.code) }])
   )
   if (scenario === "markdown-nodes") channels.set("kiwi", { ...withMarkdownNodes(DEMO_CHANNEL), docs: demoDocs("kiwi") })
+  if (scenario === "idle-ask") channels.set("kiwi", { ...withIdleAsk(DEMO_CHANNEL), docs: demoDocs("kiwi") })
   if (scenario === "departed-dms") channels.set("kiwi", { ...withDepartedDms(DEMO_CHANNEL), docs: demoDocs("kiwi") })
   if (scenario === "departed-reviewer" || scenario === "departed-reviewer-readonly")
     channels.set("kiwi", { ...withDepartedReviewer(DEMO_CHANNEL, scenario === "departed-reviewer-readonly"), docs: demoDocs("kiwi") })

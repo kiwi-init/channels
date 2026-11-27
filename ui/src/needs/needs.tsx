@@ -48,7 +48,8 @@ const strangerOf =
 
 export function needsText(channel: Channel, go: (to: Go) => void, tag?: string, now = Date.now()): { md: string; m: Maker } {
   const m = maker(tag)
-  const open = openAsks(channel).sort((a, b) => a.at - b.at)
+  const pending = openAsks(channel)
+  const open = pending.filter((a) => !isIdle(a))
   const joins = joinedQuestions(open)
   const unchecked = open.some((a) => a.kind === "join" && a.check === "unchecked")
   const idle = channel.asks.filter(isIdle).sort((a, b) => a.at - b.at)
@@ -62,7 +63,7 @@ export function needsText(channel: Channel, go: (to: Go) => void, tag?: string, 
     `# ${esc(t("shell.channel.needs.you"))}`,
     unchecked ? tone(t("needs.list.unusual.joins"), "decide") : "",
     ...open.filter((a) => !joins.joined.has(a.id)).map((a) => askText(channel, a, m, go, now, joins.more.get(a.id))),
-    open.length ? "" : m.field("clear", () => <Clear loading={!!channel.loading} />),
+    pending.length ? "" : m.field("clear", () => <Clear loading={!!channel.loading} />),
     settled.length ? `## \`kiwi:fold\` ${esc(t("needs.settled", { n: String(settled.length) }))}` : "",
     settled.length ? m.field("settled", () => <SettledList channel={channel} settled={settled} />) : "",
     idle.length ? `## ${esc(t("needs.list.idle.sum", { rest: t("needs.list.idle.rest") }))}` : "",

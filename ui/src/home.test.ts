@@ -71,13 +71,19 @@ describe("homeOf", () => {
     expect(h.leadName).toBe("lead")
   })
 
-  test("lists open asks oldest first and drops answered and idle ones", () => {
+  test("lists open asks oldest first, decisions holding nothing after them, and drops answered asks and idle plain questions", () => {
     const h = homeOf(
       channel({
-        asks: [question("2", 20), question("1", 10), question("3", 5, { answer: { text: wrote("A"), by: "jow", at: 30 } }), question("4", 1, { idle: true })],
+        asks: [
+          question("2", 20),
+          question("1", 10),
+          question("3", 5, { answer: { text: wrote("A"), by: "jow", at: 30 } }),
+          question("4", 1, { idle: true }),
+          question("5", 2, { idle: true, plain: true }),
+        ],
       })
     )
-    expect(h.asks.map((a) => a.id)).toEqual(["1", "2"])
+    expect(h.asks.map((a) => a.id)).toEqual(["1", "2", "4"])
     expect(h.asks[0]?.act).toEqual({
       kind: "options",
       options: [

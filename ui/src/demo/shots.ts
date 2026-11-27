@@ -103,6 +103,8 @@ export const SHOTS: Record<string, Shot> = {
   stash: kiwi(),
   "stash-open": kiwi(),
   "needs-step": { scenario: "step", channel: "kiwi", nav: { tab: "needs" } },
+  "idle-ask": { scenario: "idle-ask", channel: "kiwi" },
+  "needs-idle-ask": { scenario: "idle-ask", channel: "kiwi", nav: { tab: "needs" } },
   "handoff-card": { scenario: "handoff", channel: "kiwi" },
   "needs-handoff": { scenario: "handoff", channel: "kiwi", nav: { tab: "needs" } },
   agent: kiwi({ modal: { kind: "person", name: "atlas" } }),

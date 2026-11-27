@@ -15,7 +15,7 @@ import { between, nickname, onePerPerson, shown } from "~/names"
 import { dragOut, usePane } from "~/panes/place"
 import { comingBack, hiddenKey, hiddenPlaces, setHidden } from "~/shell/hidden-places"
 import { leftDirects } from "~/shell/left-directs"
-import { openAsks } from "~/needs/open"
+import { needsCount } from "~/needs/open"
 import { openTasks } from "~/tasks/open"
 import { headerLine } from "~/now"
 import { wordsPlain } from "~/words"
@@ -28,7 +28,7 @@ function ViewRows({ channel }: { channel: Channel }) {
   const go = useGo()
   const pane = usePane()
   const agents = channel.people.filter((p) => p.kind === "agent" && !p.left)
-  const needs = openAsks(channel).length
+  const needs = needsCount(channel)
   const tasks = openTasks(channel).length
   const github = channel.repos.length > 0 || !!channel.prs?.length || !!channel.issues?.length
   const openPrs = channel.prs?.filter((p) => p.state === "open" || p.state === "draft") ?? []
