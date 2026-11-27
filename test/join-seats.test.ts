@@ -105,9 +105,11 @@ describe("joining without --as", () => {
       const seats = (Array.isArray(v) ? v : [v!]) as { session?: string }[];
       return seats[0]!;
     };
-    const first = await run(h, ["status"], { CODEX_THREAD_ID: "t2" });
+    const read = await run(h, ["status"], { CODEX_THREAD_ID: "t2" });
+    expect(read.code).toBe(1);
+    expect(seat().session).toBe("t1");
+    const first = await run(h, ["send", "back after a restart"], { CODEX_THREAD_ID: "t2" });
     expect(first.code).toBe(0);
-    expect(first.out).toContain(handle);
     expect(seat().session).toBe("t2");
     const notices = first.err.split("\n").filter((l) => l.includes("t1"));
     expect(notices).toHaveLength(1);
@@ -116,6 +118,7 @@ describe("joining without --as", () => {
     expect(notices[0]).toMatch(/13/);
     const second = await run(h, ["status"], { CODEX_THREAD_ID: "t2" });
     expect(second.code).toBe(0);
+    expect(second.out).toContain(handle);
     expect(second.err).not.toContain("t1");
   });
 

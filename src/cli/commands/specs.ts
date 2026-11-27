@@ -4,7 +4,7 @@ import { parseDuration } from "@kiwi/core/format.ts";
 import { specTasks, taskId } from "@kiwi/core/state.ts";
 import { oneLook } from "../../agent.ts";
 import { args, opt } from "../args.ts";
-import { type Command, die, out, session } from "../context.ts";
+import { type Command, die, out, readSession, session } from "../context.ts";
 import { text } from "../input.ts";
 
 const PLAN_TTL = "30m";
@@ -32,7 +32,7 @@ export const specCommands: Record<string, Command> = {
   specs: () =>
     oneLook(
       Effect.gen(function* () {
-        const s = yield* session();
+        const s = yield* readSession();
         const { state } = yield* s.state();
         out(formatSpecs(state, opt.all));
       }),
@@ -43,7 +43,7 @@ export const specCommands: Record<string, Command> = {
       Effect.gen(function* () {
         const sub = args[1];
         if (!sub) return yield* specCommands.specs!();
-        const s = yield* session();
+        const s = yield* sub === "show" ? readSession() : session();
         if (sub === "show") {
           const ask = yield* askArg(2);
           const { state } = yield* s.state();

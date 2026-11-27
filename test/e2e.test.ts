@@ -390,7 +390,7 @@ describe("images and cross-channel tasks through the CLI", () => {
 
     await ok(a, "create", "second", "--as", "pic");
     await ok(a, "--as", "human", "task", "add", "second task");
-    const all = await ok(a, "task", "--global");
+    const all = await ok(a, "--as", "pic", "task", "--global");
     expect(all).toContain("## pics");
     expect(all).toContain("## second");
     expect(all).toContain("second task");

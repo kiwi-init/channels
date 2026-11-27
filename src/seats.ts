@@ -287,8 +287,8 @@ export interface SeatOptions {
   room?: string;
   /** The live listeners on this machine (hooks.ts): who listens as which agent, and from which session. */
   listeners?: () => Listener[];
-  /** Record this session on the seat it takes (default true). */
-  claim?: boolean;
+  /** Record this session on the seat it takes (default true); "own" only keeps this session's own seats fresh. */
+  claim?: boolean | "own";
   env?: Record<string, string | undefined>;
 }
 
@@ -302,6 +302,7 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
   const who = opts.who ?? here();
   const env = opts.env ?? process.env;
   const launch = upLaunch(env);
+  const takes = opts.claim === undefined || opts.claim === true;
   const live = opts.listeners?.() ?? [];
   const listening = (alias: string, as: string) => live.some((l) => l.alias === alias && l.as === as);
   // A listener this very session started (its session, or its harness's process).
@@ -329,7 +330,7 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
     const mine = who.session ? seats.filter((b) => b.session === who.session) : [];
     if (mine.length) {
       // Note that this session still uses it, so nobody takes it for stale (seats with no process to check).
-      return opts.claim !== false ? keepSeen(d, mine, who) : mine;
+      return opts.claim !== false ? keepSeen(d, mine, who, opts.claim === "own") : mine;
     }
     // This session listens as an agent from here: that's who it is, even when its seat was lost (a later join
     // from a plain terminal replaced it). It gets its seat back, beside the others.
@@ -352,7 +353,7 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
         seen: Date.now(),
       };
       let held = false;
-      if (opts.claim !== false)
+      if (takes)
         updateConfig((c) => {
           held = seatHeldAway(c, seat.alias, seat.as);
           const holds = seatHolds(c, seat.alias, seat.as);
@@ -379,7 +380,8 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
     const ofMine = free.filter((b) => who.harness && b.harness === who.harness);
     const pick = free.length === 1 ? free[0]! : who.session && ofMine.length === 1 ? ofMine[0]! : null;
     if (!pick) return [];
-    if (opts.claim !== false && who.session && (pick.session !== who.session || (who.pid && pick.pid !== who.pid))) {
+    if (takes && who.session && (pick.session !== who.session || (who.pid && pick.pid !== who.pid))) {
+      if (pick.session !== who.session && seatedAnywhere(cfg, who, env)) continue;
       // The previous holder's process goes with it: this session's, or none.
       const rest = omit(pick, "pid", "model", "harnessSession", "loop", "started", "upKey", "tmux");
       const taken: Binding = {
@@ -506,8 +508,8 @@ export function bindingFor(dir: string, opts: SeatOptions = {}): Binding | null 
   return only && !more.length ? only : null;
 }
 
-function keepSeen(dir: string, mine: Binding[], who: Here): Binding[] {
-  const moved = (m: Binding) => !!who.pid && m.pid !== who.pid;
+function keepSeen(dir: string, mine: Binding[], who: Here, seenOnly = false): Binding[] {
+  const moved = (m: Binding) => !seenOnly && !!who.pid && m.pid !== who.pid;
   const stale = mine.filter((m) => moved(m) || (!m.pid && Date.now() - (m.seen ?? m.at ?? 0) > SEEN_EVERY_MS));
   if (!stale.length) return mine;
   const now = Date.now();
@@ -529,8 +531,16 @@ export function seatsHeldAnywhere(who: Here = here(), opts: Pick<SeatOptions, "c
   const launch = upLaunch(env);
   return Object.keys(cfg.bindings ?? {}).flatMap((d) => {
     const mine = seatsAt(cfg, d).filter((b) => b.session === who.session && cfg.channels[b.alias] && !seatHeldAway(cfg, b.alias, b.as, env) && (launch === null || b.upKey === launch));
-    return opts.claim !== false ? keepSeen(d, mine, who) : mine;
+    return opts.claim !== false ? keepSeen(d, mine, who, opts.claim === "own") : mine;
   });
+}
+
+function seatedAnywhere(cfg: Config, who: Here, env: Record<string, string | undefined>): boolean {
+  return Object.keys(cfg.bindings ?? {}).some((d) => seatsAt(cfg, d).some((b) => b.session === who.session && cfg.channels[b.alias] && !seatHeldAway(cfg, b.alias, b.as, env)));
+}
+
+export function ownsSeat(b: Binding, who: Here, env: Record<string, string | undefined> = process.env): boolean {
+  return !who.session || b.session === who.session || holdsSeat(b, env);
 }
 
 export function sessionNeighbours(cfg: Config, alias: string): Map<string, Binding[]> {

@@ -1,7 +1,7 @@
 import * as Effect from "effect/Effect";
 import { formatFact, parseDuration } from "@kiwi/core/format.ts";
 import { args, opt } from "../args.ts";
-import { type Command, die, out, session } from "../context.ts";
+import { type Command, die, out, readSession, session } from "../context.ts";
 import { text } from "../input.ts";
 
 const store = (key: string, value: string) =>
@@ -14,7 +14,7 @@ const store = (key: string, value: string) =>
 
 const one = (key: string) =>
   Effect.gen(function* () {
-    const s = yield* session();
+    const s = yield* readSession();
     const f = (yield* s.state()).state.facts.get(key);
     if (!f) return yield* die(`no fact "${key}"`, 2);
     out(f.value);
@@ -22,7 +22,7 @@ const one = (key: string) =>
 
 const all = () =>
   Effect.gen(function* () {
-    const s = yield* session();
+    const s = yield* readSession();
     const { facts } = (yield* s.state()).state;
     if (!facts.size) return out("no facts");
     for (const f of [...facts.values()].sort((a, b) => a.key.localeCompare(b.key))) out(formatFact(f));
