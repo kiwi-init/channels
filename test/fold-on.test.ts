@@ -32,7 +32,7 @@ interface Run {
 
 function run(seed: number, length: number, opts: { laterRole?: number; trimAt?: number; check?: boolean } = {}): Run {
   const r = rng(seed * 7 + 1);
-  const { messages, times } = stream(seed, length);
+  const { messages, times } = stream(seed, length, { duty: true });
   const people = roster(opts.laterRole);
   const start = 1 + Math.floor(r() * 10);
   let base: FoldBase | null = null;
