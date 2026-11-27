@@ -29,6 +29,11 @@ function keep(el: Box, h: History): void {
   histories.set(el, byDraft)
 }
 
+function settle(el: Box): void {
+  const kept = histories.get(el)?.get(draftOf(el))
+  if (kept) keep(el, settled(kept, snap(el)))
+}
+
 function write(el: Box, to: Snap, type: "historyUndo" | "historyRedo"): void {
   const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
   Object.getOwnPropertyDescriptor(proto, "value")?.set?.call(el, to.value)
@@ -62,7 +67,7 @@ export function historyKey(e: Keyed, mac: boolean = onMac()): "undo" | "redo" | 
   return null
 }
 
-export function watchUndo(root: Document = document): () => void {
+export function watchUndo(root: Document = document): void {
   const keydown = (e: KeyboardEvent) => {
     const el = e.target
     if (!undoable(el) || composing.has(el)) return
@@ -84,8 +89,7 @@ export function watchUndo(root: Document = document): () => void {
   const input = (e: Event) => {
     const el = e.target
     if (writing || !undoable(el) || composing.has(el)) return
-    const kept = histories.get(el)?.get(draftOf(el))
-    if (kept) keep(el, settled(kept, snap(el)))
+    settle(el)
   }
   const started = (e: CompositionEvent) => {
     const el = e.target
@@ -97,21 +101,11 @@ export function watchUndo(root: Document = document): () => void {
     const el = e.target
     if (!undoable(el)) return
     composing.delete(el)
-    setTimeout(() => {
-      const kept = histories.get(el)?.get(draftOf(el))
-      if (kept) keep(el, settled(kept, snap(el)))
-    })
+    setTimeout(() => settle(el))
   }
   root.addEventListener("keydown", keydown, true)
   root.addEventListener("beforeinput", beforeinput, true)
   root.addEventListener("input", input, true)
   root.addEventListener("compositionstart", started, true)
   root.addEventListener("compositionend", ended, true)
-  return () => {
-    root.removeEventListener("keydown", keydown, true)
-    root.removeEventListener("beforeinput", beforeinput, true)
-    root.removeEventListener("input", input, true)
-    root.removeEventListener("compositionstart", started, true)
-    root.removeEventListener("compositionend", ended, true)
-  }
 }
