@@ -14,7 +14,17 @@ import { joinAgent, pairComputer, setupChannel, type OwnerSetup } from "./owner.
 
 setDefaultTimeout(60_000);
 
-const bareHome = mkdtempSync(join(tmpdir(), "kiwi-lease-throttle-bare-"));
+const bareHomes: string[] = [];
+const onColdComputer = async <A>(act: () => Promise<A>): Promise<A> => {
+  const bare = mkdtempSync(join(tmpdir(), "kiwi-lease-throttle-bare-"));
+  bareHomes.push(bare);
+  process.env.KIWI_HOME = bare;
+  try {
+    return await act();
+  } finally {
+    process.env.KIWI_HOME = home;
+  }
+};
 const dataDir = mkdtempSync(join(tmpdir(), "kiwi-lease-throttle-relay-"));
 const home = mkdtempSync(join(tmpdir(), "kiwi-lease-throttle-home-"));
 const was = process.env.KIWI_HOME;
@@ -33,7 +43,7 @@ const clockAt = (at: number) => {
   ticker = setInterval(() => setSystemTime(new Date(at + performance.now() - real)), 5);
 };
 
-const limited = { reads: 0, until: 0, gets: 0, only: [] as number[] };
+const limited = { reads: 0, until: 0, gets: 0, only: [] as number[], jumpTo: 0 };
 const write = { lateAt: 0, interject: false, lost: false, refused: [] as string[] };
 const historyRead = (path: string, init?: { method?: string }) => {
   if (path !== "/messages" || (init?.method ?? "GET") !== "GET") return false;
@@ -43,7 +53,12 @@ const historyRead = (path: string, init?: { method?: string }) => {
 const appending = (path: string, init?: { method?: string }) => init?.method === "POST" && (path === "/messages" || path.startsWith("/messages/after/"));
 const tooMany = () =>
   Effect.andThen(
-    Effect.sync(() => limited.reads++),
+    Effect.sync(() => {
+      limited.reads++;
+      if (!limited.jumpTo) return;
+      clockAt(limited.jumpTo);
+      limited.jumpTo = 0;
+    }),
     Effect.fail(new RelayError(429, "too many history reads; wait a minute", "TooMany", null)),
   );
 type Params = Record<string, string | number>;
@@ -101,14 +116,14 @@ beforeAll(async () => {
 afterEach(() => {
   clearInterval(ticker);
   setSystemTime();
-  Object.assign(limited, { reads: 0, until: 0, gets: 0, only: [] });
+  Object.assign(limited, { reads: 0, until: 0, gets: 0, only: [], jumpTo: 0 });
   Object.assign(write, { lateAt: 0, interject: false, lost: false, refused: [] });
 });
 afterAll(() => {
   server.stop(true);
   if (was === undefined) delete process.env.KIWI_HOME;
   else process.env.KIWI_HOME = was;
-  for (const d of [dataDir, home, bareHome]) rmSync(d, { recursive: true, force: true });
+  for (const d of [dataDir, home, ...bareHomes]) rmSync(d, { recursive: true, force: true });
 });
 
 test("a renewal under a short read limit retries and keeps the lease", async () => {
@@ -245,17 +260,57 @@ test("on a computer with no copy of the channel, a limited first read is retried
   const held = await run(ann.lease("cold", 120));
   await run(bob.lease("cold", 120));
   const from = await headNow();
-  process.env.KIWI_HOME = bareHome;
-  try {
-    Object.assign(limited, { gets: 0, only: [1, 2] });
-    const renewed = await runLimited(annAgain().lease("cold", 600));
-    expect(limited.reads).toBe(2);
-    expect(renewed).toMatchObject({ holder: "ann", since: held.since });
-    expect(renewed.queue.map((q) => q.name)).toEqual(["bob"]);
-  } finally {
-    process.env.KIWI_HOME = home;
-  }
+  Object.assign(limited, { gets: 0, only: [1, 2] });
+  const renewed = await onColdComputer(() => runLimited(annAgain().lease("cold", 600)));
+  expect(limited.reads).toBe(2);
+  expect(renewed).toMatchObject({ holder: "ann", since: held.since });
+  expect(renewed.queue.map((q) => q.name)).toEqual(["bob"]);
   expect((await annTakes("cold", from)).map((t) => t.op)).toEqual(["lease.take"]);
   await run(ann.unlease("cold"));
   await run(bob.unlease("cold"));
+});
+
+test("on a cold computer, a hold that runs out while the first read is limited, with no one waiting, isn't taken again: nothing is sent and no hold is left", async () => {
+  const held = await run(ann.lease("lapse", 60));
+  const from = await headNow();
+  clockAt(held.until - 12_000);
+  Object.assign(limited, { gets: 0, only: [1], jumpTo: held.until + 600 });
+  await expect(onColdComputer(() => runLimited(annAgain().lease("lapse", 600)))).rejects.toThrow("can't tell whether it ran out meanwhile: nothing was sent");
+  expect(limited.reads).toBe(1);
+  expect((await run(bob.state())).state.leases.get("lapse")?.holder).toBeUndefined();
+  expect(await annTakes("lapse", from)).toEqual([]);
+});
+
+test("on a cold computer, a hold that runs out while the first read is limited, with a seat waiting, isn't asked for again: the waiting seat holds it and the old holder isn't in line", async () => {
+  const held = await run(ann.lease("lapse-q", 60));
+  await run(bob.lease("lapse-q", 60));
+  const from = await headNow();
+  clockAt(held.until - 12_000);
+  Object.assign(limited, { gets: 0, only: [1], jumpTo: held.until + 600 });
+  await expect(onColdComputer(() => runLimited(annAgain().lease("lapse-q", 600)))).rejects.toThrow("can't tell whether it ran out meanwhile: nothing was sent");
+  const lease = (await run(bob.state())).state.leases.get("lapse-q");
+  expect(lease).toMatchObject({ holder: "bob", since: held.until });
+  expect(lease?.queue.map((q) => q.name)).toEqual([]);
+  expect(await annTakes("lapse-q", from)).toEqual([]);
+});
+
+test("on a cold computer, a limited first read doesn't stop a fresh ask: a lease this seat never asked for is taken as usual", async () => {
+  const from = await headNow();
+  Object.assign(limited, { gets: 0, only: [1] });
+  const got = await onColdComputer(() => runLimited(annAgain().lease("fresh", 60)));
+  expect(limited.reads).toBe(1);
+  expect(got.holder).toBe("ann");
+  expect((await annTakes("fresh", from)).map((t) => t.op)).toEqual(["lease.take"]);
+  await run(ann.unlease("fresh"));
+});
+
+test("a hold that ended on purpose doesn't block asking again under a limited first read: after letting go, the next ask takes it fresh", async () => {
+  await run(ann.lease("again", 60));
+  await run(ann.unlease("again"));
+  const from = await headNow();
+  Object.assign(limited, { gets: 0, only: [1] });
+  const got = await onColdComputer(() => runLimited(annAgain().lease("again", 60)));
+  expect(got.holder).toBe("ann");
+  expect((await annTakes("again", from)).map((t) => t.op)).toEqual(["lease.take"]);
+  await run(ann.unlease("again"));
 });

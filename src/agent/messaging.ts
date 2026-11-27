@@ -46,6 +46,7 @@ import {
   isPerson,
   landingTouchedByClose,
   leadForAsk,
+  LEASE_WAIT_MS,
   nextIn,
   ON_HOLD,
   ownerOf,
@@ -76,6 +77,11 @@ const clockTime = (at: number): string => new Date(at).toTimeString().slice(0, 8
 
 const stillLimited = (name: string) =>
   new Rejected(`the relay kept limiting history reads for ${FIRST_READ_WAIT_MS / 1000}s and this computer has no copy of the channel, so nothing was sent for ${name} (kiwi lock ${name} tries again)`);
+
+const unsure = (name: string) =>
+  new Rejected(
+    `the relay was limiting history reads when you asked, and once a read came through no hold on ${name} was yours, so this can't tell whether it ran out meanwhile: nothing was sent (kiwi lock ${name} asks again)`,
+  );
 
 const relayRefused = (err: unknown, tag: string): boolean => err instanceof RelayError && err.tag === tag;
 
@@ -619,10 +625,26 @@ export class SessionMessaging extends SessionListen {
 
   private heldByMe(name: string) {
     return Effect.gen({ self: this }, function* () {
-      const known = yield* this.retryRead(this.state().pipe(Effect.provideService(OfflineReads, { note: () => {} })), Date.now() + FIRST_READ_WAIT_MS, stillLimited(name));
+      const asked = Date.now();
+      let limited = false;
+      const read = this.state().pipe(
+        Effect.provideService(OfflineReads, { note: () => {} }),
+        Effect.tapError((err) => Effect.sync(() => void (readLimited(err) && (limited = true)))),
+      );
+      const known = yield* this.retryRead(read, asked + FIRST_READ_WAIT_MS, stillLimited(name));
       const lease = known.state.leases.get(name);
-      return lease?.holder === this.me && lease.until > Date.now() ? lease : null;
+      if (lease?.holder === this.me && lease.until > Date.now()) return lease;
+      if (limited && this.mayHaveHeld(known.messages, lease, name, asked)) return yield* unsure(name);
+      return null;
     });
+  }
+
+  private mayHaveHeld(messages: readonly Message[], lease: Frozen<Lease> | undefined, name: string, asked: number): boolean {
+    if (lease?.holder && lease.holder !== this.me && lease.since <= asked) return false;
+    const mine = messages.filter((m) => m.from === this.me && (m.ev?.op === "lease.take" || m.ev?.op === "lease.free") && m.ev.name === name);
+    const last = mine.at(-1);
+    if (last?.ev?.op !== "lease.take") return false;
+    return (last.rts ?? last.ts) + LEASE_WAIT_MS + last.ev.ttl * 1000 > asked;
   }
 
   private renewWhileHeld(name: string, ttl: number, note: string | undefined, held: Frozen<Lease>) {
