@@ -1,4 +1,4 @@
-import type { Frozen } from "@kiwi/core/state.ts";
+import type { Frozen, Lease } from "@kiwi/core/state.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { personaAnswers } from "@kiwi/core/personality.ts";
 import * as Deferred from "effect/Deferred";
@@ -6,12 +6,13 @@ import * as Effect from "effect/Effect";
 import { mergeCard, movedCard, sameCard, type Where } from "../card.ts";
 import { here, realSession, type Here } from "../seats.ts";
 import { sessionFingerprint } from "@kiwi/core/session-print.ts";
-import { eachLive, RelayError, type Live, type SendOptions } from "@kiwi/core/client.ts";
+import { eachLive, OfflineReads, RelayError, type Live, type Refused, type SendOptions } from "@kiwi/core/client.ts";
 import { Cursor } from "../config.ts";
 import { cardLine } from "@kiwi/core/format.ts";
 import { changeTo, mentionsOf } from "@kiwi/core/changes.ts";
 import { wakeList } from "@kiwi/core/phone-wake.ts";
 import {
+  AFTER_SKEW_MS,
   editable,
   GENERAL_ROOM,
   HANDOFF_DONE,
@@ -59,9 +60,31 @@ import {
 import type { BlockMedia } from "@kiwi/core/doc/blocks.ts";
 import { addressed, blockMedia, docPlaceOfMessage, dropBlock, editBlock, readDoc, writeBlock, type DocPlace } from "./docs.ts";
 import { SessionListen } from "./listen.ts";
-import { EVERYONE, oneLook } from "./shared.ts";
+import { EVERYONE, Look, oneLook, type Agent } from "./shared.ts";
 
 const ANSWERING_TTL = 600_000;
+const READ_RETRY_FIRST_MS = 1_000;
+const READ_RETRY_MAX_MS = 8_000;
+const READ_RETRY_LAST_MS = 250;
+const RENEW_CONFIRM_MS = 120_000;
+const RENEW_RACES = 5;
+
+const readLimited = (err: unknown): boolean => err instanceof RelayError && err.status === 429;
+
+const clockTime = (at: number): string => new Date(at).toTimeString().slice(0, 8);
+
+const relayRefused = (err: unknown, tag: string): boolean => err instanceof RelayError && err.tag === tag;
+
+const tooLate = (name: string, until: number) =>
+  new Rejected(`your hold on ${name} ends at ${clockTime(until)}, and with less than ${AFTER_SKEW_MS / 1000}s left a renewal could land after it, so none was sent (kiwi lock ${name} asks again)`);
+
+const endedFirst = (name: string) => new Rejected(`your hold on ${name} ended before it could be renewed, so none was sent (kiwi lock ${name} asks again)`);
+
+const keptMoving = (name: string) => new Rejected(`the channel kept moving while ${name} was being renewed, so no renewal was stored (kiwi lock ${name} tries again)`);
+
+const offClock = new Rejected(`the relay's clock and this computer's differ by more than ${AFTER_SKEW_MS / 1000}s, so no renewal was stored: kiwi doctor shows the difference`);
+
+const unconfirmed = (name: string) => new Rejected(`the renewal of ${name} is sent, but the relay is still limiting history reads, so it isn't confirmed: kiwi status shows whether you hold ${name}`);
 
 const answeringKey = (seq: number): string => `answering #${seq}`;
 
@@ -573,14 +596,66 @@ export class SessionMessaging extends SessionListen {
     function* (this: SessionMessaging, name: string, ttlSec: number, note?: string) {
       if (!LEASE_NAME_RE.test(name)) return yield* new Rejected("a lease is named in lowercase letters, digits and . _ / -, up to 64 characters: kiwi lock build");
       if (ttlSec < 60 || ttlSec > MAX_LEASE_SECONDS) return yield* new Rejected(`a lease lasts from a minute to ${MAX_LEASE_SECONDS / 3600}h`);
-      const seq = yield* this.event({ op: "lease.take", name, ttl: Math.round(ttlSec), ...(note ? { note } : {}) }, `asked for ${name}`);
-      const after = yield* this.confirm(seq);
+      const ttl = Math.round(ttlSec);
+      const held = yield* this.heldByMe(name);
+      if (!held) {
+        const seq = yield* this.event({ op: "lease.take", name, ttl, ...(note ? { note } : {}) }, `asked for ${name}`);
+        const lease = (yield* this.confirm(seq)).leases.get(name);
+        if (!lease) return yield* new Rejected(`${name} didn't take`);
+        return lease;
+      }
+      const seq = yield* this.renewWhileHeld(name, ttl, note, held);
+      const after = (yield* this.retryRead(this.state(), Date.now() + RENEW_CONFIRM_MS, unconfirmed(name))).state;
       const lease = after.leases.get(name);
-      if (!lease) return yield* new Rejected(`${name} didn't take`);
+      if (after.rejected.has(seq) || lease?.holder !== this.me) return yield* new Rejected(`${name} was renewed, but you no longer hold it: kiwi status shows who does`);
       return lease;
     },
     oneLook,
   );
+
+  private heldByMe(name: string) {
+    return Effect.gen({ self: this }, function* () {
+      const known = yield* this.state().pipe(
+        Effect.provideService(OfflineReads, { note: () => {} }),
+        Effect.catchIf(readLimited, () => Effect.succeed(null)),
+      );
+      const lease = known?.state.leases.get(name);
+      return lease?.holder === this.me && lease.until > Date.now() ? lease : null;
+    });
+  }
+
+  private freshState() {
+    return Effect.suspend(() => Effect.provideService(this.state(), Look, { fetched: new WeakSet(), seen: new WeakMap() }));
+  }
+
+  private renewWhileHeld(name: string, ttl: number, note: string | undefined, held: Frozen<Lease>) {
+    const deadline = held.until - AFTER_SKEW_MS;
+    const race = (left: number): Effect.Effect<number, Refused | Rejected, Agent> =>
+      Effect.gen({ self: this }, function* () {
+        const { state } = yield* this.retryRead(this.freshState(), deadline, tooLate(name, held.until));
+        const lease = state.leases.get(name);
+        if (lease?.holder !== this.me || lease.since !== held.since) return yield* endedFirst(name);
+        const at = Date.now();
+        if (lease.until - AFTER_SKEW_MS <= at) return yield* tooLate(name, lease.until);
+        const sent = this.event({ op: "lease.take", name, ttl, ...(note ? { note } : {}) }, `renewed ${name}`, undefined, undefined, { after: { head: state.head, at } });
+        return yield* Effect.catchIf(
+          sent,
+          (err) => relayRefused(err, "MovedOn") || relayRefused(err, "OffClock"),
+          (err) => (left > 0 ? race(left - 1) : Effect.fail(relayRefused(err, "OffClock") ? offClock : keptMoving(name))),
+        );
+      });
+    return race(RENEW_RACES);
+  }
+
+  private retryRead<A, E, R>(read: Effect.Effect<A, E, R>, until: number, giveUp: Rejected): Effect.Effect<A, E | Rejected, R> {
+    const attempt = (wait: number): Effect.Effect<A, E | Rejected, R> =>
+      Effect.catchIf(read, readLimited, () => {
+        const left = until - Date.now();
+        if (left <= 0) return Effect.fail(giveUp);
+        return Effect.andThen(Effect.sleep(Math.min(wait, Math.max(left / 2, READ_RETRY_LAST_MS))), attempt(Math.min(wait * 2, READ_RETRY_MAX_MS)));
+      });
+    return attempt(READ_RETRY_FIRST_MS);
+  }
 
   readonly unlease = Effect.fn("AgentSession.unlease")(
     { self: this },
