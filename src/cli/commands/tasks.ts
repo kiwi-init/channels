@@ -114,11 +114,13 @@ export const taskCommands: Record<string, Command> = {
           const title = opt.file !== undefined ? args.slice(2).join(" ") : yield* text(2);
           if (!title.trim())
             return yield* die(
-              'usage: kiwi task add "title" --ask N|--from T…|--issue N [--body "the spec" | --file spec.md] [--owner NAME | --start] [--review NAME|any] [--then merge|release:tag|release:npm:PKG@RANGE|run|none|"a step" …] [--lander NAME]',
+              'usage: kiwi task add "title" --ask N|--from T…|--issue N [--body "the spec" | --file spec.md] [--owner NAME | --start] [--review NAME|any] [--then merge|release:tag|release:npm:PKG@RANGE|run|none|"a step" …] [--lander NAME] [--force]',
             );
           for (const gone of ["after", "needs"] as const)
             if (opt[gone] !== undefined) process.stderr.write(`kiwi: --${gone} is gone (tasks don't wait on or match anything now); put it in the body (--body)\n`);
           const { state: before } = yield* s.state();
+          const like = similarOpenTasks(before, title).map((t) => t.id);
+          if (like.length && !opt.force) return yield* die(`not added: "${title}" ${looksLikeLine(like)}, still open. If it's a different task, run the same command again with --force`);
           const id = yield* s.taskAdd(title, {
             owner: opt.owner,
             detail: body,
@@ -127,16 +129,15 @@ export const taskCommands: Record<string, Command> = {
             ...(from !== undefined ? { from } : {}),
             ...landing,
           });
-          const like = similarOpenTasks(before, title).map((t) => t.id);
           const lines = [`added ${taskId(id)}${yield* started(id)}`];
-          if (like.length) lines.push(looksLikeLine(like));
+          if (like.length) lines.push(`added anyway (--force): ${looksLikeLine(like)}`);
           const { state: added } = yield* s.state();
           const ask = added.tasks.get(id)?.ask;
           if (opt.goal !== undefined) {
             if (ask === undefined) lines.push(`no goal named: ${taskId(id)} isn't filed under a person's message`);
             else lines.push(`goal of #${ask}: ${(yield* s.nameGoal(ask, opt.goal)).goal}`);
           } else if (ask !== undefined && !added.askHeads.get(ask)?.goal && mayNameGoal(added, s.me, added.askHeads.get(ask)!))
-            lines.push(`#${ask} has no goal yet: name it in plain words for the board, kiwi goal ${ask} "0.27.7: …"`);
+            lines.push(`hint: #${ask} has no goal yet. The task is added; to name a goal for the board: kiwi goal ${ask} "0.27.7: …"`);
           return out(lines.join("\n"));
         }
         if (sub === "checkpoint" && args[2] === "lead") {
