@@ -11,9 +11,10 @@ import { leadCheckpointRefusal } from "@kiwi/core/reentry.ts";
 import { askRefusal, isPerson, taskSpecRefusal, leadCheckpointKey, mayNameGoal, openRound, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts";
 import { formatCandidates, reasonText } from "@kiwi/core/routing-text.ts";
-import { bindingFor } from "../../hooks.ts";
+import { seatsFor } from "../../hooks.ts";
+import { ownsSeat } from "../../seats.ts";
 import { args, opt } from "../args.ts";
-import { type Command, die, keepDaemon, offlineOk, out, readSession, session } from "../context.ts";
+import { type Command, declaredHere, die, keepDaemon, offlineOk, out, readSession, session } from "../context.ts";
 import { firstLine, readText, taskArg, text } from "../input.ts";
 import { landingFromOptions, taskLanded, taskSteps } from "./task-steps.ts";
 import { parseSpan, spanText } from "@kiwi/core/steps.ts";
@@ -33,10 +34,19 @@ const board = () =>
         const cfg = yield* keys.config;
         const aliases = Object.keys(cfg.channels).sort();
         if (!aliases.length) return yield* die("no channels yet (see: kiwi join)");
-        const me =
-          opt.as ?? process.env.KIWI_AS ?? bindingFor(process.cwd(), { claim: false })?.as ?? (yield* die("--global needs to know who you are: pass --as NAME, or run it from your bound folder"));
+        const named = opt.as ?? process.env.KIWI_AS;
+        const who = declaredHere();
+        const seatIn = (alias: string): string | undefined => {
+          const [only, ...more] = seatsFor(process.cwd(), { alias, claim: "own" }).filter((b) => b.alias === alias && ownsSeat(b, who));
+          return only && !more.length ? only.as : undefined;
+        };
+        const seated = aliases.flatMap((alias) => {
+          const me = named ?? seatIn(alias);
+          return me ? [{ alias, me }] : [];
+        });
+        if (!seated.length) return yield* die("--global needs to know who you are: pass --as NAME, or run it from your bound folder");
         yield* keepDaemon;
-        for (const alias of aliases) {
+        for (const { alias, me } of seated) {
           const c = cfg.channels[alias]!;
           if (!(yield* keys.identitiesIn(c.roomId)).includes(me)) continue;
           const sess = yield* openSession(alias, c, me);
@@ -66,7 +76,7 @@ export const taskCommands: Record<string, Command> = {
       Effect.gen(function* () {
         if (!args[1] || args[1] === "list") return yield* board();
         const sub = args[1];
-        const s = yield* sub === "show" || sub === "who" ? readSession() : session();
+        const s = yield* sub === "show" || sub === "who" || (sub === "steps" && args[3] === undefined) ? readSession() : session();
         const STATE_FOR: Record<string, TaskState> = { start: "doing", review: "review", done: "done" };
         if (sub === "add") {
           const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || (yield* die("--ask takes a message number: --ask 18"));

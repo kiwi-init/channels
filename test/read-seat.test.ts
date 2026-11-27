@@ -44,6 +44,7 @@ const READS: string[][] = [
   ["task", "list"],
   ["task", "show", "T1"],
   ["task", "who", "T1"],
+  ["task", "steps", "T1"],
   ["spec", "show", "1"],
   ["specs"],
   ["rooms"],
@@ -163,5 +164,24 @@ describe("a read-only command never takes over a seat (#2688)", () => {
     expect(await ok(ownerB, ["log"])).not.toContain("from a seat G lost");
     expect((await run(h, ["reply", seq, "from the seat that holds it"], RESTARTED, projects)).code).toBe(0);
     expect(await ok(ownerB, ["log"])).toContain("from the seat that holds it");
+  });
+
+  test("the global board reads each channel only as a seat the session owns there, or as the one --as names", async () => {
+    const { h, projects } = await seated();
+    const before = ownership(h);
+    const listening = await slots(h);
+    const implicit = await run(h, ["task", "--global"], WORKER, projects);
+    expect(implicit.code).toBe(0);
+    expect(implicit.out).toContain("## alpha");
+    expect(implicit.out).not.toContain("## beta");
+    const named = await run(h, ["--as", "sleeper", "task", "--global"], WORKER, projects);
+    expect(named.code).toBe(0);
+    expect(named.out).toContain("## beta");
+    expect(named.out).not.toContain("## alpha");
+    const seatless = await run(h, ["task", "--global"], RESTARTED, projects);
+    expect(seatless.code).toBe(1);
+    expect(seatless.err).toContain("--global needs to know who you are");
+    expect(ownership(h)).toEqual(before);
+    expect(await slots(h)).toEqual(listening);
   });
 });
