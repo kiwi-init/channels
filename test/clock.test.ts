@@ -963,3 +963,23 @@ describe("what the clock says is due on a lead's task is what the fold accepts (
     }
   });
 });
+
+describe("the lead's step follows the lead on duty (#19397 box 8)", () => {
+  test("a quiet task's lead step goes to the lead on duty, and a step raised before a handover isn't raised again after it", async () => {
+    const c = channel();
+    await c.ev("jon", { op: "lead.standby", name: "zed", on: true });
+    const { id, epoch, since } = await inReview(c);
+    c.wait(N);
+    await c.nudge("mac", id, "mac", epoch, 1);
+    const out = await c.ev("owl", { op: "lead.duty", to: "zed", from: 0 });
+    expect(c.state().rejected.has(out.seq)).toBe(false);
+    expect(due(c, since + 2 * N)).toEqual([{ task: id, mover: "mac", since: epoch, step: 2, to: "zed" }]);
+    c.wait(N);
+    await c.nudge("zed", id, "mac", epoch, 2);
+    const back = await c.ev("zed", { op: "lead.duty", to: "owl", from: out.seq });
+    expect(c.state().rejected.has(back.seq)).toBe(false);
+    expect(due(c, since + 2 * N + 10_000)).toEqual([]);
+    expect(due(c, since + 3 * N)).toEqual([{ task: id, mover: "mac", since: epoch, step: 3, to: "jon" }]);
+    expect(c.state().rejected.size).toBe(0);
+  });
+});

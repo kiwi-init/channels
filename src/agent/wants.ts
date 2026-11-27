@@ -60,6 +60,7 @@ export function wants(me: string, m: Message, state: ChannelState | null, d: Del
   const waiting = d.loop && state ? waitingTask(state, me) : undefined;
   if (waiting !== undefined) return wantsWhileWaiting(me, m, state, waiting);
   if (state && (specNews(me, m, state) || specComment(me, m, state))) return true;
+  if (state && m.kind !== "event" && state.lead === me && (m.re ?? []).some((r) => state.leadOwned.has(r) || state.leadAsks.has(r))) return true;
   const persona = state?.members.get(me)?.persona;
   const addressed = isDirectedAt(m, me) || !!m.to?.includes("*") || !!m.to?.some((t) => t.startsWith("role:") && personaAnswers(persona, t.slice(5)));
   if (m.kind === "event")

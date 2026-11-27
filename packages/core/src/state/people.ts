@@ -1,7 +1,7 @@
 import type { Frozen } from "./types.ts";
 import type { Color, Message } from "../protocol.ts";
 import { canPost } from "../scopes.ts";
-import type { ChannelState, Member } from "./types.ts";
+import type { ChannelState, LeadAsk, Member } from "./types.ts";
 import { personOf, rootOf } from "../room-rules.ts";
 
 export const isPerson = (m: { kind?: string; owner?: boolean }) => m.kind === "human" || !!m.owner;
@@ -62,6 +62,10 @@ export function trustedOf(state: Pick<ChannelState, "members">): string[] {
 
 export function answersAsk(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, m: Frozen<Pick<Message, "from" | "esc" | "to" | "handoff" | "step">>, name: string): boolean {
   return m.esc ? !!m.to?.includes(name) || (!m.handoff && !m.step && answersDecisions(members, name)) : name !== m.from;
+}
+
+export function answersLeadAsk(members: ReadonlyMap<string, Pick<Member, "active" | "owner" | "answersDecisions">>, ask: Pick<LeadAsk, "plain">, lead: string | null, name: string): boolean {
+  return name === lead || !!(members.get(name)?.owner && members.get(name)?.active) || (ask.plain && answersDecisions(members, name));
 }
 
 export function decidersOf(state: Pick<ChannelState, "members">, m: Pick<Message, "esc" | "to" | "handoff" | "permission" | "step">): string[] {

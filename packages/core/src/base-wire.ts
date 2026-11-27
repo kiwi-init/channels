@@ -160,6 +160,17 @@ function wellFormedStandbys(x: unknown): boolean {
   );
 }
 
+function wellFormedPairs(x: unknown, value: (v: Record<string, unknown>) => boolean): boolean {
+  if (x === undefined) return true;
+  return Array.isArray(x) && x.every((e) => Array.isArray(e) && e.length === 2 && seqOk(e[0]) && !!e[1] && typeof e[1] === "object" && value(e[1] as Record<string, unknown>));
+}
+
+const wellFormedLeadAsk = (a: Record<string, unknown>): boolean =>
+  nameOk(a.sentTo) &&
+  nameOk(a.from) &&
+  typeof a.plain === "boolean" &&
+  (a.answer === undefined || (!!a.answer && typeof a.answer === "object" && nameOk((a.answer as Record<string, unknown>).by) && seqOk((a.answer as Record<string, unknown>).seq)));
+
 export function wellFormedWire(x: unknown, n: number): x is Wire {
   if (!x || typeof x !== "object") return false;
   const b = x as Record<string, unknown>;
@@ -178,7 +189,9 @@ export function wellFormedWire(x: unknown, n: number): x is Wire {
     (b.landing === undefined || b.landing === null || isLanding(b.landing)) &&
     (b.landingSteps === undefined || b.landingSteps === null || wellFormedStepSpecs(b.landingSteps)) &&
     wellFormedDuty(b.duty) &&
-    wellFormedStandbys(b.standbys)
+    wellFormedStandbys(b.standbys) &&
+    wellFormedPairs(b.leadAsks, wellFormedLeadAsk) &&
+    wellFormedPairs(b.leadOwned, (o) => nameOk(o.author))
   );
 }
 

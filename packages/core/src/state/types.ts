@@ -328,6 +328,8 @@ export interface ChannelStateDraft {
   duty: Duty | null;
   standbys: Map<string, Standby>;
   homeLead: string | null;
+  leadAsks: Map<number, LeadAsk>;
+  leadOwned: Map<number, LeadOwned>;
   checks: Map<number, CheckState>;
   threadOf: Map<number, number>;
   threadPeople: Map<number, Set<string>>;
@@ -415,6 +417,17 @@ export interface Standby {
   by: string;
 }
 
+export interface LeadAsk {
+  sentTo: string;
+  from: string;
+  plain: boolean;
+  answer?: { by: string; seq: number };
+}
+
+export interface LeadOwned {
+  author: string;
+}
+
 export interface FoldBase {
   n: number;
   members: {
@@ -488,6 +501,8 @@ export interface FoldBase {
   specsOnly?: number | null;
   duty?: Duty | null;
   standbys?: [string, Standby][];
+  leadAsks?: [number, LeadAsk][];
+  leadOwned?: [number, LeadOwned][];
   checks?: CheckState[];
   answered: [number, string[]][];
   threadOf: [number, number][];

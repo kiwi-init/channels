@@ -139,8 +139,8 @@ export function leadHoldsFor(state: Pick<ChannelState, "members" | "lead">, me: 
   return lead?.active && !isPerson(lead) ? lead.name : null;
 }
 
-export function handedToLead(state: Pick<ChannelState, "openAsks" | "lead">, seq: number): Frozen<Message | undefined> {
-  return state.openAsks.find((a) => a.seq === seq && state.lead !== null && a.to?.includes(state.lead) && readHandedOver(String(a.body ?? ""))?.from === a.from);
+export function handedToLead(state: Pick<ChannelState, "openAsks" | "leadAsks">, seq: number): Frozen<Message | undefined> {
+  return state.openAsks.find((a) => a.seq === seq && state.leadAsks.has(seq) && readHandedOver(String(a.body ?? ""))?.from === a.from);
 }
 
 export function directThreadStart(state: Pick<ChannelState, "placeOf">, seq: number): number | null {
@@ -271,10 +271,11 @@ export interface HandedAsk {
   handed: Handed;
 }
 
-export function handedTo(state: Pick<ChannelState, "openAsks">, me: string): Frozen<HandedAsk[]> {
+export function handedTo(state: Pick<ChannelState, "openAsks" | "leadAsks" | "lead">, me: string): Frozen<HandedAsk[]> {
   return state.openAsks
     .flatMap((ask) => {
-      const handed = ask.from !== me && ask.to?.includes(me) ? readHandedOver(String(ask.body ?? "")) : null;
+      const mine = state.leadAsks.has(ask.seq) ? state.lead === me : !!ask.to?.includes(me);
+      const handed = ask.from !== me && mine ? readHandedOver(String(ask.body ?? "")) : null;
       return handed?.from === ask.from ? [{ ask, handed }] : [];
     })
     .sort((a, b) => a.ask.seq - b.ask.seq);
