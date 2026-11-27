@@ -14,6 +14,7 @@ import { joinAgent, pairComputer, setupChannel, type OwnerSetup } from "./owner.
 
 setDefaultTimeout(60_000);
 
+const bareHome = mkdtempSync(join(tmpdir(), "kiwi-lease-throttle-bare-"));
 const dataDir = mkdtempSync(join(tmpdir(), "kiwi-lease-throttle-relay-"));
 const home = mkdtempSync(join(tmpdir(), "kiwi-lease-throttle-home-"));
 const was = process.env.KIWI_HOME;
@@ -22,6 +23,7 @@ let owner: OwnerSetup;
 let ann: AgentSession;
 let bob: AgentSession;
 let cat: AgentSession;
+let annAgain: () => AgentSession;
 
 let ticker: ReturnType<typeof setInterval> | undefined;
 const clockAt = (at: number) => {
@@ -31,9 +33,13 @@ const clockAt = (at: number) => {
   ticker = setInterval(() => setSystemTime(new Date(at + performance.now() - real)), 5);
 };
 
-const limited = { reads: 0, until: 0 };
+const limited = { reads: 0, until: 0, gets: 0, only: [] as number[] };
 const write = { lateAt: 0, interject: false, lost: false, refused: [] as string[] };
-const historyRead = (path: string, init?: { method?: string }) => path === "/messages" && (init?.method ?? "GET") === "GET" && Date.now() < limited.until;
+const historyRead = (path: string, init?: { method?: string }) => {
+  if (path !== "/messages" || (init?.method ?? "GET") !== "GET") return false;
+  limited.gets++;
+  return Date.now() < limited.until || limited.only.includes(limited.gets);
+};
 const appending = (path: string, init?: { method?: string }) => init?.method === "POST" && (path === "/messages" || path.startsWith("/messages/after/"));
 const tooMany = () =>
   Effect.andThen(
@@ -86,22 +92,23 @@ beforeAll(async () => {
     const { id, ch } = await joinAgent(owner, name, computer);
     return new AgentSession("leases", { ...ch.access, relay: owner.relay, code: owner.code }, id, () => {});
   };
-  ann = await session("ann");
+  const annSeat = await joinAgent(owner, "ann", computer);
+  annAgain = () => new AgentSession("leases", { ...annSeat.ch.access, relay: owner.relay, code: owner.code }, annSeat.id, () => {});
+  ann = annAgain();
   bob = await session("bob");
   cat = await session("cat");
 });
 afterEach(() => {
   clearInterval(ticker);
   setSystemTime();
-  limited.until = 0;
-  limited.reads = 0;
+  Object.assign(limited, { reads: 0, until: 0, gets: 0, only: [] });
   Object.assign(write, { lateAt: 0, interject: false, lost: false, refused: [] });
 });
 afterAll(() => {
   server.stop(true);
   if (was === undefined) delete process.env.KIWI_HOME;
   else process.env.KIWI_HOME = was;
-  for (const d of [dataDir, home]) rmSync(d, { recursive: true, force: true });
+  for (const d of [dataDir, home, bareHome]) rmSync(d, { recursive: true, force: true });
 });
 
 test("a renewal under a short read limit retries and keeps the lease", async () => {
@@ -206,4 +213,49 @@ test("a renewal whose answer is lost is sent again under the same send id: the r
   const lease = (await run(bob.state())).state.leases.get("sign");
   expect(lease).toMatchObject({ holder: "ann", since: held.since });
   expect(lease?.queue.map((q) => q.name)).toEqual(["bob"]);
+});
+
+test("a limit that comes and goes, refusing the first and third history reads of the renewal, is retried at every read: renewed with one take", async () => {
+  const held = await run(ann.lease("roll", 120));
+  await run(bob.lease("roll", 120));
+  const from = await headNow();
+  Object.assign(limited, { gets: 0, only: [1, 3] });
+  const renewed = await runLimited(ann.lease("roll", 600));
+  expect(limited.reads).toBe(2);
+  expect(renewed).toMatchObject({ holder: "ann", since: held.since });
+  expect(renewed.until).toBeGreaterThan(held.until);
+  expect(renewed.queue.map((q) => q.name)).toEqual(["bob"]);
+  expect((await annTakes("roll", from)).map((t) => t.op)).toEqual(["lease.take"]);
+  await run(ann.unlease("roll"));
+  await run(bob.unlease("roll"));
+});
+
+test("a limit that refuses every other history read still renews, with one take", async () => {
+  const held = await run(ann.lease("flip", 120));
+  const from = await headNow();
+  Object.assign(limited, { gets: 0, only: [1, 3, 5, 7, 9, 11] });
+  const renewed = await runLimited(ann.lease("flip", 600));
+  expect(limited.reads).toBeGreaterThanOrEqual(2);
+  expect(renewed).toMatchObject({ holder: "ann", since: held.since });
+  expect((await annTakes("flip", from)).map((t) => t.op)).toEqual(["lease.take"]);
+  await run(ann.unlease("flip"));
+});
+
+test("on a computer with no copy of the channel, a limited first read is retried too, so the renewal still goes out guarded", async () => {
+  const held = await run(ann.lease("cold", 120));
+  await run(bob.lease("cold", 120));
+  const from = await headNow();
+  process.env.KIWI_HOME = bareHome;
+  try {
+    Object.assign(limited, { gets: 0, only: [1, 2] });
+    const renewed = await runLimited(annAgain().lease("cold", 600));
+    expect(limited.reads).toBe(2);
+    expect(renewed).toMatchObject({ holder: "ann", since: held.since });
+    expect(renewed.queue.map((q) => q.name)).toEqual(["bob"]);
+  } finally {
+    process.env.KIWI_HOME = home;
+  }
+  expect((await annTakes("cold", from)).map((t) => t.op)).toEqual(["lease.take"]);
+  await run(ann.unlease("cold"));
+  await run(bob.unlease("cold"));
 });

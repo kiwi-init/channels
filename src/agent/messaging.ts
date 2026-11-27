@@ -68,10 +68,14 @@ const READ_RETRY_MAX_MS = 8_000;
 const READ_RETRY_LAST_MS = 250;
 const RENEW_CONFIRM_MS = 120_000;
 const RENEW_RACES = 5;
+const FIRST_READ_WAIT_MS = 60_000;
 
 const readLimited = (err: unknown): boolean => err instanceof RelayError && err.status === 429;
 
 const clockTime = (at: number): string => new Date(at).toTimeString().slice(0, 8);
+
+const stillLimited = (name: string) =>
+  new Rejected(`the relay kept limiting history reads for ${FIRST_READ_WAIT_MS / 1000}s and this computer has no copy of the channel, so nothing was sent for ${name} (kiwi lock ${name} tries again)`);
 
 const relayRefused = (err: unknown, tag: string): boolean => err instanceof RelayError && err.tag === tag;
 
@@ -615,35 +619,29 @@ export class SessionMessaging extends SessionListen {
 
   private heldByMe(name: string) {
     return Effect.gen({ self: this }, function* () {
-      const known = yield* this.state().pipe(
-        Effect.provideService(OfflineReads, { note: () => {} }),
-        Effect.catchIf(readLimited, () => Effect.succeed(null)),
-      );
-      const lease = known?.state.leases.get(name);
+      const known = yield* this.retryRead(this.state().pipe(Effect.provideService(OfflineReads, { note: () => {} })), Date.now() + FIRST_READ_WAIT_MS, stillLimited(name));
+      const lease = known.state.leases.get(name);
       return lease?.holder === this.me && lease.until > Date.now() ? lease : null;
     });
   }
 
-  private freshState() {
-    return Effect.suspend(() => Effect.provideService(this.state(), Look, { fetched: new WeakSet(), seen: new WeakMap() }));
-  }
-
   private renewWhileHeld(name: string, ttl: number, note: string | undefined, held: Frozen<Lease>) {
     const deadline = held.until - AFTER_SKEW_MS;
+    const judgedAndSent = Effect.gen({ self: this }, function* () {
+      const { state } = yield* this.retryRead(this.state(), deadline, tooLate(name, held.until));
+      const lease = state.leases.get(name);
+      if (lease?.holder !== this.me || lease.since !== held.since) return yield* endedFirst(name);
+      const at = Date.now();
+      if (lease.until - AFTER_SKEW_MS <= at) return yield* tooLate(name, lease.until);
+      return yield* this.event({ op: "lease.take", name, ttl, ...(note ? { note } : {}) }, `renewed ${name}`, undefined, undefined, { after: { head: state.head, at } });
+    });
+    const inOwnLook = Effect.suspend(() => Effect.provideService(judgedAndSent, Look, { fetched: new WeakSet(), seen: new WeakMap() }));
     const race = (left: number): Effect.Effect<number, Refused | Rejected, Agent> =>
-      Effect.gen({ self: this }, function* () {
-        const { state } = yield* this.retryRead(this.freshState(), deadline, tooLate(name, held.until));
-        const lease = state.leases.get(name);
-        if (lease?.holder !== this.me || lease.since !== held.since) return yield* endedFirst(name);
-        const at = Date.now();
-        if (lease.until - AFTER_SKEW_MS <= at) return yield* tooLate(name, lease.until);
-        const sent = this.event({ op: "lease.take", name, ttl, ...(note ? { note } : {}) }, `renewed ${name}`, undefined, undefined, { after: { head: state.head, at } });
-        return yield* Effect.catchIf(
-          sent,
-          (err) => relayRefused(err, "MovedOn") || relayRefused(err, "OffClock"),
-          (err) => (left > 0 ? race(left - 1) : Effect.fail(relayRefused(err, "OffClock") ? offClock : keptMoving(name))),
-        );
-      });
+      Effect.catchIf(
+        inOwnLook,
+        (err) => relayRefused(err, "MovedOn") || relayRefused(err, "OffClock"),
+        (err) => (left > 0 ? race(left - 1) : Effect.fail(relayRefused(err, "OffClock") ? offClock : keptMoving(name))),
+      );
     return race(RENEW_RACES);
   }
 
