@@ -10,7 +10,7 @@ import { isNewerList, listedComputer, readDeviceList, type DeviceLink } from "@k
 import { readMachineCert } from "@kiwi/core/person.ts";
 import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
-import { listenedPath, pulledPath, viaOf } from "@kiwi/core/wake.ts";
+import { listenedPath, pulledPath, viaOf, type WakePath } from "@kiwi/core/wake.ts";
 import { seatHeldAway } from "../hold.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
 import {
@@ -46,6 +46,7 @@ import { CHECKPOINT_WINDOW_MS } from "@kiwi/core/checkpoint-schedule.ts";
 import { followDocs } from "./doc-follow.ts";
 import { liveAbout, LiveBlobs, relayLiveIo } from "./live-blobs.ts";
 import { pathOf, seatWakes } from "./wake.ts";
+import { codexControlSocket, codexHome, codexServing } from "./codex-queue.ts";
 import { sampleRunning } from "../up/sample.ts";
 
 export const ACTIVITY_EVERY_MS = 3_000;
@@ -189,11 +190,20 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     seat.listenerAt = at;
     return true;
   };
+  const servedPath = async (cfg: Config, seat: Seat, path: WakePath): Promise<WakePath> => {
+    if (path.kind !== "command" || path.via !== "codex-queue") return path;
+    const served = await codexServing(codexControlSocket(codexHome()), path.session, seatRecordFor(cfg, seat.alias, seat.agent)?.bin);
+    return served.kind === "absent" ? { kind: "none", why: `Codex isn't serving thread ${path.session}: its messages queue until that thread is resumed` } : path;
+  };
   const livePath = async (cfg: Config, seat: Seat, attached: Attached, activity = seat.activity) =>
-    pulledPath(
-      listenedPath(await pathOf(cfg, seat.alias, seat.agent), listenedLately(seat, attached), activity?.state === "idle"),
-      { harness: seatRecordFor(cfg, seat.alias, seat.agent)?.harness, held: seatHeldAway(cfg, seat.alias, seat.agent, {}) },
-      attached === "listener",
+    servedPath(
+      cfg,
+      seat,
+      pulledPath(
+        listenedPath(await pathOf(cfg, seat.alias, seat.agent), listenedLately(seat, attached), activity?.state === "idle"),
+        { harness: seatRecordFor(cfg, seat.alias, seat.agent)?.harness, held: seatHeldAway(cfg, seat.alias, seat.agent, {}) },
+        attached === "listener",
+      ),
     );
 
   const refreshActivity = async (seat: Seat, force = false): Promise<void> => {
