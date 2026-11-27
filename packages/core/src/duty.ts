@@ -1,4 +1,6 @@
+import { mentionsOf } from "./changes.ts";
 import { clockOf, nudgesDue } from "./clock.ts";
+import type { Message } from "./protocol.ts";
 import { ago } from "./format.ts";
 import { inlineText } from "./membership.ts";
 import { handedTo } from "./state/asks.ts";
@@ -86,4 +88,29 @@ export function offDutyLines(state: Frozen<Pick<ChannelState, "offDuty" | "tasks
     ...section("tasks closed", closed),
     ...section("specs ticked", specs),
   ];
+}
+
+export function offDutyLeads(state: Frozen<Pick<ChannelState, "duty" | "offDuty" | "homeLead" | "lead">>): string[] {
+  if (!state.duty) return [];
+  const names = new Set([...(state.offDuty?.left ?? []).map(([name]) => name), ...(state.homeLead ? [state.homeLead] : [])]);
+  if (state.lead) names.delete(state.lead);
+  return [...names].sort();
+}
+
+export function offDutyHint(state: Frozen<Pick<ChannelState, "duty" | "offDuty" | "homeLead" | "lead">>, named: Iterable<string>): string | null {
+  const off = new Map(offDutyLeads(state).map((name) => [name.toLowerCase(), name]));
+  const hit = [...new Set([...named].flatMap((n) => off.get(n.replace(/^@/, "").toLowerCase()) ?? []))];
+  if (!hit.length || !state.lead) return null;
+  return `${hit.join(", ")} ${hit.length === 1 ? "is" : "are"} off duty; ${state.lead} is the lead on duty`;
+}
+
+export function mentionsOffDutyLead(state: Frozen<Pick<ChannelState, "duty" | "offDuty" | "homeLead" | "lead">>, m: Pick<Message, "kind" | "dm" | "body">): boolean {
+  if (m.kind === "event" || m.dm) return false;
+  const said = mentionsOf(m.body);
+  return offDutyLeads(state).some((name) => said.has(name.toLowerCase()));
+}
+
+export function leadsNow(state: Frozen<Pick<ChannelState, "members" | "lead" | "duty">>, name: string): boolean {
+  const member = state.members.get(name);
+  return !!member && (!!member.owner || state.lead === name || (state.duty === null && member.persona?.role === "lead"));
 }

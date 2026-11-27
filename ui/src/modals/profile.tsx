@@ -37,6 +37,8 @@ const PRESENCE: Record<Person["presence"], Key> = {
 
 const personaOf = (personas: App["personas"], value: string | undefined) => (value ? personas.find((p) => p.id === value || p.label === value) : undefined)
 
+const DUTY_TAGS = { on: "modals.profile.tag.duty.on", off: "modals.profile.tag.duty.off", standby: "modals.profile.tag.duty.standby" } as const satisfies Record<NonNullable<Person["duty"]>, string>
+
 export function Profile({ channel, name, onClose }: { channel: Channel; name: string; onClose: () => void }) {
   const person = memberOf(channel, name)
   if (!person)
@@ -47,9 +49,13 @@ export function Profile({ channel, name, onClose }: { channel: Channel; name: st
     )
   const tags = [
     ...new Set(
-      [person.you && t("modals.profile.tag.you"), person.owner && t("modals.profile.tag.owner"), person.role && roleWord(person.role), person.readOnly && t("modals.profile.tag.reads.only")].filter(
-        (tag): tag is string => !!tag
-      )
+      [
+        person.you && t("modals.profile.tag.you"),
+        person.owner && t("modals.profile.tag.owner"),
+        person.role && roleWord(person.role),
+        person.duty && t(DUTY_TAGS[person.duty]),
+        person.readOnly && t("modals.profile.tag.reads.only"),
+      ].filter((tag): tag is string => !!tag)
     ),
   ]
   const manages = (channel.youOwn || (channel.youManageAgents && person.kind === "agent") || person.yours) && !person.you && !person.owner && !person.left

@@ -26,6 +26,7 @@ import { Rejected } from "@kiwi/core/refusals.ts";
 import { wellFormedRunId } from "@kiwi/core/checks.ts";
 import { currentStep, landedStepRefusal, stepById, stepText, type StepEdit, type StepSpec } from "@kiwi/core/steps.ts";
 import { stepEditRefusal } from "@kiwi/core/state/landing-steps.ts";
+import { leadsNow } from "@kiwi/core/duty.ts";
 import { handoverCheckpointRefusal } from "@kiwi/core/state/lead.ts";
 import {
   isPerson,
@@ -272,7 +273,7 @@ export class SessionTasks extends SessionMessaging {
       const opensReview = finishing && change.review === undefined && reviewerLeft && state.lead === this.me;
       const review = change.review ? yield* this.reviewer(state, change.review) : opensReview ? "*" : change.review;
       const me = state.members.get(this.me);
-      const lead = !!me && (!!me.owner || me.persona?.role === "lead" || state.lead === this.me);
+      const lead = leadsNow(state, this.me);
       if (change.detail !== undefined && me && !isPerson(me) && !lead) return yield* new Rejected(`only a person or the lead rewrites ${taskId(id)}'s body`);
       if (me) {
         const refused = change.claim ? reviewClaimRefusal(t, this.me, review) : reviewMoveRefusal(t, { name: this.me, person: isPerson(me), lead }, review);
@@ -414,7 +415,7 @@ export class SessionTasks extends SessionMessaging {
             ? { ...change, by: (yield* this.resolveTo([change.by], state))?.[0] ?? change.by }
             : change;
       const me = state.members.get(this.me);
-      const lead = !!me && (!!me.owner || state.lead === this.me || (state.duty === null && me.persona?.role === "lead"));
+      const lead = leadsNow(state, this.me);
       const refused = me ? stepEditRefusal(t, edit, { name: this.me, person: isPerson(me), lead }) : null;
       if (refused) return yield* new Rejected(refused);
       const about = edit.kind === "add" ? edit.step.words : stepText(stepById(t, edit.id) ?? { id: edit.id, words: "" });
@@ -480,7 +481,7 @@ export class SessionTasks extends SessionMessaging {
       const t = state.tasks.get(id);
       if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
       const me = state.members.get(this.me);
-      if (me && !isPerson(me) && state.lead !== this.me && me.persona?.role !== "lead") return yield* new Rejected(`only a person or the lead deletes ${taskId(id)}`);
+      if (me && !isPerson(me) && !leadsNow(state, this.me)) return yield* new Rejected(`only a person or the lead deletes ${taskId(id)}`);
       const notify = [...new Set([t.owner, t.createdBy].filter((n): n is string => !!n && n !== this.me))];
       const reason = why?.trim().slice(0, 500);
       const seq = yield* this.event({ op: "task.delete", task: id, ...(reason ? { why: reason } : {}) }, `deleted ${taskId(id)}`, notify.length ? notify : undefined);

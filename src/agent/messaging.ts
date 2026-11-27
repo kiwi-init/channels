@@ -1,4 +1,5 @@
 import type { Frozen, Lease, Task } from "@kiwi/core/state.ts";
+import { leadsNow } from "@kiwi/core/duty.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { personaAnswers } from "@kiwi/core/personality.ts";
 import * as Deferred from "effect/Deferred";
@@ -568,7 +569,7 @@ export class SessionMessaging extends SessionListen {
   readonly closeAsk = Effect.fn("AgentSession.closeAsk")({ self: this }, function* (this: SessionMessaging, ask: number, why: string | undefined) {
     const { state } = yield* this.state();
     const me = state.members.get(this.me);
-    const lead = !!me && (!!me.owner || me.persona?.role === "lead" || state.lead === this.me);
+    const lead = leadsNow(state, this.me);
     const late = checkChangeRefusal(landingTouchedByClose(state.tasks, state.checks, ask), { person: !!me && isPerson(me), lead }, "closes a check on");
     if (late) return yield* new Rejected(late);
     return yield* this.event({ op: "ask.close", ask, ...(why ? { why } : {}) }, why ? `closed #${ask}: ${why}` : `closed #${ask}`, undefined, ask);

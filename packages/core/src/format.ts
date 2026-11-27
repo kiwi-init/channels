@@ -717,6 +717,8 @@ export function statusJson({ alias, me, state, online, unread }: Omit<Snapshot, 
     head: state.head,
     unread,
     lead: state.lead,
+    homeLead: state.homeLead,
+    standbys: [...state.standbys.keys()].sort(),
     charter: state.charter?.text ?? null,
     repos: state.repos,
     leases: [...state.leases.values()].map((l) => ({ name: l.name, holder: l.holder ?? null, until: l.holder ? l.until : null, note: l.note ?? null, queue: l.queue.map((q) => q.name) })),
@@ -726,13 +728,19 @@ export function statusJson({ alias, me, state, online, unread }: Omit<Snapshot, 
   };
 }
 
+const LEAD_DUTIES =
+  'keep the board tidy, hand out what nobody has taken to whoever has its context, best one whose session still holds it (kiwi task who T7 ranks them; say why when you pick someone else), and follow up on what stalls. When a task\'s reviewer is away, move the review (kiwi task review T7 --review OTHER) or close the task (kiwi task close T7 "why"). Everyone still talks to people directly';
+
 /** `kiwi status`: everything an agent needs before deciding what to do next. */
 export function leadLine(state: ChannelState, me: string): string | null {
   const lead = state.lead;
   if (!lead) return null;
-  if (lead === me)
-    return 'you are the lead: keep the board tidy, hand out what nobody has taken to whoever has its context, best one whose session still holds it (kiwi task who T7 ranks them; say why when you pick someone else), and follow up on what stalls. When a task\'s reviewer is away, move the review (kiwi task review T7 --review OTHER) or close the task (kiwi task close T7 "why"). Everyone still talks to people directly';
-  return `lead: ${lead}, who keeps the board. Talk to people directly; mention ${lead} for anything nobody owns`;
+  const away = state.duty && state.homeLead && state.homeLead !== lead ? state.homeLead : null;
+  if (away === me) return `you are the channel's own lead, off duty: ${lead} is the lead on duty until the lead is handed back (kiwi lead)`;
+  if (lead === me && away) return `you are the lead on duty, standing in for ${away}: ${LEAD_DUTIES}`;
+  if (lead === me) return `you are the lead: ${LEAD_DUTIES}`;
+  const home = away ? `lead on duty: ${lead} (the channel's own lead, ${away}, is off duty)` : `lead: ${lead}`;
+  return `${home}, who keeps the board. Talk to people directly; mention ${lead} for anything nobody owns`;
 }
 
 /** The hold, loud, for the top of status and anywhere an agent might start work. Null when not on hold. */
@@ -799,6 +807,8 @@ export function formatStatus({ alias, check, me, state, online, unread, now = Da
   if (meM && presetOf(meM.scopes) !== "full") out.push(`the owner lets you: ${mayDo(meM.scopes)}`);
   const lead = leadLine(state, me);
   if (lead) out.push(lead);
+  const standbys = [...state.standbys.keys()].sort();
+  if (standbys.length) out.push(`standby leads: ${standbys.join(", ")} (kiwi lead shows the duty)`);
   const charter = charterLines(state);
   if (charter) out.push(charter);
   if (state.repos.length) out.push(`repos: ${state.repos.join(", ")}`);

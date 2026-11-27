@@ -183,6 +183,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     kind: human ? "human" : "agent",
     ...displayOf(state, m),
     ...(m.name === state.lead ? { role: "lead" } : m.owner ? { role: "owner" } : m.persona ? { role: m.persona.name } : {}),
+    ...dutyOf(state, m.name),
     ...(color ? { color } : {}),
     ...(human && m.picture ? { picture: `data:${m.picture.mime};base64,${m.picture.data}` } : {}),
     owner: m.owner,
@@ -837,6 +838,12 @@ function moverFor(state: ChannelState, t: Frozen<CoreTask>, now: number): TaskMo
   if (m.kind === "nobody") return { kind: "nobody" }
   if (m.kind === "wait") return { kind: "wait", reason: wrote(m.reason), ...(m.until !== undefined ? { until: m.until } : {}) }
   return { kind: "hold", until: m.until, reason: wrote(m.reason) }
+}
+
+function dutyOf(state: ChannelState, name: string): Pick<Person, "duty"> {
+  if (state.duty && name === state.lead) return { duty: "on" }
+  if (state.duty && name === state.homeLead) return { duty: "off" }
+  return state.standbys.has(name) ? { duty: "standby" } : {}
 }
 
 function quietFor(state: ChannelState, t: Frozen<CoreTask>, now: number): TaskQuiet | undefined {
