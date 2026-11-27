@@ -19,6 +19,9 @@ export interface Seat {
   reach: Reach | null;
   unarmed: Unarmed | null;
   untaken: Unarmed | null;
+  missedWhileAbsent: boolean;
+  wasAbsent: boolean;
+  refreshGen: number;
   taking: { thread: string; seqs: number[]; at: number; resumed: boolean; timer: ReturnType<typeof setTimeout> } | null;
   activityTimer: ReturnType<typeof setInterval> | null;
   live?: LiveBlobs | null;

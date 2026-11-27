@@ -26,6 +26,7 @@ const presenceConns = new WeakSet<object>();
 const loadedAsked: (string | null)[] = [];
 type LoadedList = { pages: string[][] } | { error: string } | null;
 let loadedList: LoadedList = null;
+let loadedDelayMs = 0;
 const loadedAnswer = (cursor: string | null): object => {
   if (loadedList === null) return { result: {} };
   if ("error" in loadedList) return { error: { code: -32000, message: loadedList.error } };
@@ -109,6 +110,8 @@ beforeAll(() => {
         }
         if (m.id === undefined) return;
         const answer = m.method === "thread/loaded/list" ? loadedAnswer(m.params?.cursor ?? null) : { result: {} };
+        const delay = m.method === "thread/loaded/list" ? loadedDelayMs : 0;
+        if (delay) await Bun.sleep(delay);
         ws.send(JSON.stringify({ id: m.id, ...answer }));
       },
     },
@@ -127,6 +130,7 @@ beforeEach(async () => {
   rpc.length = 0;
   loadedAsked.length = 0;
   loadedList = null;
+  loadedDelayMs = 0;
   hooks = {};
   afterUnread = null;
   await quiet();
@@ -307,9 +311,32 @@ describe("a Codex seat reads as wakeable only while Codex serves its thread (#26
     await until("the wake-not-taken alert", async () => (await untaken()) !== null, TAKE_MS * 4);
     await until("the app dimming claude", lit(null), 15_000);
     loadedList = { pages: [[OTHER, id]] };
+    const asked = loadedAsked.length;
+    await until("two refreshes after the thread loads", () => loadedAsked.length >= asked + 2, 15_000);
+    expect(appHow()).toBeNull();
+    expect((await seat())?.wake.path).toEqual({ kind: "none", why: `Codex serves thread ${id} again, but no turn has read the wake it missed yet` });
     await readAll();
     await until("the alert clearing once a turn reads", async () => (await untaken()) === null, 15_000);
     await until("the app lighting claude", lit("wakes"), 15_000);
+  });
+
+  test("a late answer from an older refresh can't dim a seat a newer refresh found served", async () => {
+    const id = "01a1e000-0000-7000-8000-000000000057";
+    thread(id, [{ type: "task_complete", at: Date.now() - 60_000 }]);
+    loadedList = { pages: [[id]] };
+    bindAs({ harness: "codex", session: id });
+    await until("the app lighting claude", lit("wakes"), 15_000);
+    const asked = loadedAsked.length;
+    loadedList = { pages: [[OTHER]] };
+    loadedDelayMs = 4_500;
+    await until("a refresh asking while the thread is gone", () => loadedAsked.length > asked, 10_000);
+    loadedList = { pages: [[id]] };
+    loadedDelayMs = 0;
+    const from = w.heard.length;
+    await Bun.sleep(9_000);
+    const since = w.heard.slice(from).filter((p) => p.from === "claude");
+    expect(since.map((p) => howHere(hear(new Map(), p, Date.now()).get(p.pk!)))).not.toContain(null);
+    expect(appHow()).toBe("wakes");
   });
 
   test("a live seat busy on an earlier turn stays lit with its wake not taken, and reads it when free", async () => {
