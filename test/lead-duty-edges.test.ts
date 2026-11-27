@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { leadsNow, namesOffDutyLead, offDutyHint, offDutyLeads } from "@kiwi/core/duty.ts";
+import { leadsNow, namesOffDutyLead, offDutyHint, offDutyLeads, parentAuthor } from "@kiwi/core/duty.ts";
 import { formatStatus, statusJson } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { EVENT_OPS_VERSION, PROTOCOL_VERSION, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
@@ -116,6 +116,25 @@ describe("messages to an off-duty lead (#19397 box 12)", () => {
     const restored = baseFromWire(JSON.parse(JSON.stringify(toWire(base!))) as Record<string, unknown>);
     expect(restored).not.toBeNull();
     expect(view(fold(c.log.slice(asked.seq + 1), roster, at(10_000), null, null, restored))).toEqual(want);
+  });
+
+  test("replying to a parent from before the snapshot still tells the sender who is on duty: its author comes from the fold, or from the fetched original for an ask", async () => {
+    const c = await channel();
+    const asked = await c.say("lead", "msg", "Which day?");
+    const formal = await c.say("lead", "ask", "Is the build green?", { to: ["ann"] });
+    await c.hand("lead", "spare", `#${formal.seq} build question to ann`);
+    let base: FoldBase | null = null;
+    fold(c.log, roster, at(10_000), null, null, null, (b) => void (base = b));
+    const restored = fold([], roster, at(10_000), null, null, baseFromWire(JSON.parse(JSON.stringify(toWire(base!))) as Record<string, unknown>));
+    expect(restored.lead).toBe("spare");
+    expect([parentAuthor(restored, asked.seq, null), parentAuthor(restored, formal.seq, null), parentAuthor(restored, formal.seq, formal), parentAuthor(restored, formal.seq, asked)]).toEqual([
+      "lead",
+      undefined,
+      "lead",
+      undefined,
+    ]);
+    expect(offDutyHint(restored, [parentAuthor(restored, asked.seq, null)!])).toBe("lead is off duty; spare is the lead on duty");
+    expect(offDutyHint(restored, [parentAuthor(restored, formal.seq, formal)!])).toBe("lead is off duty; spare is the lead on duty");
   });
 });
 
