@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import { leaseLine, parseDuration } from "@kiwi/core/format.ts";
 import { placeIn } from "@kiwi/core/state.ts";
 import { args, opt } from "../args.ts";
-import { type Command, die, out, session } from "../context.ts";
+import { type Command, die, out, readSession, session } from "../context.ts";
 
 const DEFAULT_LEASE = "30m";
 const LISTS = new Set(["status", "list", "ls"]);
@@ -13,10 +13,11 @@ const WAIT_POLL_MS = 2_000;
 export const leaseCommands: Record<string, Command> = {
   lock: () =>
     Effect.gen(function* () {
-      const s = yield* session();
       const name = args[1];
       if (name && LETS_GO.has(name)) return yield* die(`kiwi lock ${name} takes no lease named "${name}": let one go with kiwi unlock ${args[2] ?? "NAME"}`);
-      if (!name || LISTS.has(name)) {
+      const listing = !name || LISTS.has(name);
+      const s = yield* listing ? readSession() : session();
+      if (listing) {
         const { state } = yield* s.state();
         if (!state.leases.size) return out("no leases: kiwi lock NAME [--ttl 30m] [--note why] takes one");
         for (const l of [...state.leases.values()].sort((a, b) => a.name.localeCompare(b.name))) out(leaseLine(l, s.me));

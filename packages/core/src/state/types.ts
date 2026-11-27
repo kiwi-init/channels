@@ -325,6 +325,11 @@ export interface ChannelStateDraft {
   askHeads: Map<number, AskHead>;
   specs: Map<number, Spec>;
   specsOnly: number | null;
+  duty: Duty | null;
+  standbys: Map<string, Standby>;
+  homeLead: string | null;
+  leadAsks: Map<number, LeadAsk>;
+  leadOwned: Map<number, LeadOwned>;
   checks: Map<number, CheckState>;
   threadOf: Map<number, number>;
   threadPeople: Map<number, Set<string>>;
@@ -401,6 +406,32 @@ export interface SecretRoom {
 
 export type PersonaLead = boolean | "roster";
 
+export interface Duty {
+  lead: string;
+  since: number;
+  by: string;
+}
+
+export interface Standby {
+  since: number;
+  by: string;
+}
+
+export interface LeadAsk {
+  sentTo: string;
+  from: string;
+  plain: boolean;
+  answer?: { by: string; seq: number };
+}
+
+export interface LeadOwned {
+  author: string;
+  to: string[];
+  esc: boolean;
+  plain: boolean;
+  answer?: { by: string; seq: number; to: string };
+}
+
 export interface FoldBase {
   n: number;
   members: {
@@ -472,6 +503,10 @@ export interface FoldBase {
   askHeads?: AskHead[];
   specs?: Spec[];
   specsOnly?: number | null;
+  duty?: Duty | null;
+  standbys?: [string, Standby][];
+  leadAsks?: [number, LeadAsk][];
+  leadOwned?: [number, LeadOwned][];
   checks?: CheckState[];
   answered: [number, string[]][];
   threadOf: [number, number][];

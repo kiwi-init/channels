@@ -14,6 +14,7 @@ const TABLE: [Load, string[]][] = [
   [() => import("./commands/compact.ts").then((m) => m.compactCommands), ["compact"]],
   [() => import("./commands/facts.ts").then((m) => m.factCommands), ["note"]],
   [() => import("./commands/leases.ts").then((m) => m.leaseCommands), ["lock", "unlock"]],
+  [() => import("./commands/lead.ts").then((m) => m.leadCommands), ["lead"]],
   [() => import("./commands/tasks.ts").then((m) => m.taskCommands), ["task", "goal", "claim", "release", "claims"]],
   [() => import("./commands/specs.ts").then((m) => m.specCommands), ["specs", "spec"]],
   [() => import("./commands/tools.ts").then((m) => m.toolCommands), ["relay", "demo", "doctor"]],

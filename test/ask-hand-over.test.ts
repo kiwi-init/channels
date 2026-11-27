@@ -112,6 +112,8 @@ describe("handedTo and handedNote: the Lead's list and its wake line (T504)", ()
   const sign = handedOver("finch", "Sign the build", { holds: ["T8"], step: { why: "the release waits on it", needsPerson: "the key is on your Mac" } });
   const state = {
     openAsks: [ask(30, "finch", ["puma"], sign), ask(12, "wren", ["puma"], look), ask(20, "jon", ["puma"], "Ship it?"), ask(25, "otter", ["puma"], look), ask(40, "wren", ["jon"], look)],
+    leadAsks: new Map(),
+    lead: null,
   };
 
   test("only asks handed to me by their own asker count, oldest first", () => {
@@ -126,7 +128,7 @@ describe("handedTo and handedNote: the Lead's list and its wake line (T504)", ()
   test("the wake line counts them and goes quiet once the wake shows them all", () => {
     const now = 1_000 * 12 + 5 * 60_000;
     expect(handedNote(state, "puma", "kiwi", [], now)).toBe("* 2 decisions handed to you wait, the oldest (#12) from 5m ago: `kiwi status` lists them, oldest first.");
-    expect(handedNote({ openAsks: state.openAsks.slice(1, 2) }, "puma", "kiwi", [], now)).toBe("* 1 decision handed to you waits (#12, from 5m ago): `kiwi status` shows it.");
+    expect(handedNote({ ...state, openAsks: state.openAsks.slice(1, 2) }, "puma", "kiwi", [], now)).toBe("* 1 decision handed to you waits (#12, from 5m ago): `kiwi status` shows it.");
     expect(handedNote(state, "puma", "kiwi", [12], now)).not.toBeNull();
     expect(handedNote(state, "puma", "kiwi", [12, 30], now)).toBeNull();
     expect(handedNote(state, "wren", "kiwi", [], now)).toBeNull();
@@ -445,7 +447,7 @@ describe("kiwi ask-human says where the question went (T503)", () => {
   });
 
   test("the Lead's own decision is escalated to the person as before", async () => {
-    const own = /\bT(\d+)\b/.exec(await ok(puma, "task", "add", "Tab bar icons", "--from", `T${held}`))![1]!;
+    const own = /\bT(\d+)\b/.exec(await ok(puma, "task", "add", "pick a glass or flat look", "--from", `T${held}`))![1]!;
     expect(await ok(puma, "ask-human", "--holds", `T${own}`, "--option", "A: glass", "--option", "B: flat", "Which look?")).toMatch(/^escalated #\d+ to human with 2 options, holding T\d+/);
   });
 });

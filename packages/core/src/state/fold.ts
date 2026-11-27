@@ -20,7 +20,7 @@ import {
 import { inlineText } from "../membership.ts";
 import { canPost, refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
-import { allowedOnHold, answersAsk, escalationTargets, isLeadRole, isPerson, LEAD, ON_HOLD, sameAuthor } from "./people.ts";
+import { allowedOnHold, answersAsk, answersLeadAsk, answersLeadOwned, escalationTargets, isLeadRole, isPerson, LEAD, ON_HOLD, sameAuthor } from "./people.ts";
 import { answerChecks, checkFrom, closeCheck, openCheck, replaceRefusal, type CheckState } from "./checks.ts";
 import { checkAnswered, checkClosed, checkStep, migrateChecks, questionAnswered, questionWatched, seedSteps } from "./landing-steps.ts";
 import { choiceIn } from "../checks.ts";
@@ -28,7 +28,7 @@ import { stepsOfThen } from "../steps.ts";
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { rootOf, sentTo } from "../room-rules.ts";
-import { askHeadOf, askOfMessage, fileTask } from "./asks.ts";
+import { askHeadOf, askOfMessage, fileTask, readHandedOver } from "./asks.ts";
 import { cancelledWithSpec, closesOnItsOwn, foldSpec, noteSpecComment, specGate } from "./specs.ts";
 import { backToReview, checkChangeRefusal, closeCancelled, landingTouchedByAsk, landingTouchedByClose, taskId } from "./tasks.ts";
 import { linkSafe, prKey, releasesFrom, repoKey, runKey } from "./github.ts";
@@ -83,8 +83,12 @@ import type {
   Roster,
   SecretRoom,
   Spec,
+  Standby,
+  LeadAsk,
+  LeadOwned,
   Task,
   StepQuestion,
+  Duty,
 } from "./types.ts";
 import { inRoom } from "../room-rules.ts";
 import { packAuthors, unpackAuthors } from "./authors.ts";
@@ -223,6 +227,11 @@ interface Inner {
   ctx: FoldCtx;
   placesBefore: NonNullable<FoldBase["placesBefore"]>;
   specsOnly: ChannelStateDraft["specsOnly"];
+  duty: Duty | null;
+  standbys: ReadonlyMap<string, Standby>;
+  leadAsks: ReadonlyMap<number, LeadAsk>;
+  leadOwned: ReadonlyMap<number, LeadOwned>;
+  dutyLead: (home: string | null) => string | null;
   head: number;
   seen: Set<number>;
   forward: Set<number>;
@@ -357,12 +366,17 @@ export function cursor(
       if (held(member.pk, power)) member[power] = true;
       else delete member[power];
   }
+  let duty: Duty | null = from?.duty ?? null;
+  const standbys = new Map<string, Standby>(from?.standbys);
+  const leadAsks = new Map<number, LeadAsk>(from?.leadAsks);
+  const leadOwned = new Map<number, LeadOwned>(from?.leadOwned);
   const trusted = (pk: string, member: FoldMember): boolean => member.kind === "human" && !member.owner && canPost(scopesByKey.get(pk) ?? []) && POWERS.every((p) => held(pk, p));
   const logged = (member: FoldMember): boolean | undefined => {
     const lead = personaLead.get(member.name);
     return lead === "roster" ? undefined : lead;
   };
-  const leads = (member: FoldMember): boolean => member.owner || isLeadRole(member.role) || (logged(member) ?? (signed.has(member.name) && member.persona?.role === "lead"));
+  const leads = (member: FoldMember): boolean =>
+    duty ? member.owner || member.name === duty.lead : member.owner || isLeadRole(member.role) || (logged(member) ?? (signed.has(member.name) && member.persona?.role === "lead"));
   const scopesByKey = new Map<string, Scope[]>();
   for (const r of roster) scopesByKey.set(r.pk, scopesOf(r));
   for (const [pk, scopes] of from?.scopesByKey ?? []) scopesByKey.set(pk, scopes);
@@ -423,6 +437,7 @@ export function cursor(
   const placesBefore = from?.placesBefore ?? [];
   const answered = new Map<number, Set<string>>(from?.answered.map(([seq, by]) => [seq, new Set(by)]));
   const closedAsks = new Set<number>();
+  const baseAsks = new Set(from?.asks.map((a) => a.seq));
   const askers = new Map([...(from?.asks ?? []), ...messages].flatMap((a): [number, string][] => ((a.kind === "ask" || a.kind === "blocking") && !a.permission ? [[a.seq, a.from]] : [])));
   const decisions = new Set([...(from?.asks ?? []), ...messages].flatMap((a): number[] => ((a.kind === "ask" || a.kind === "blocking") && a.esc && !a.permission ? [a.seq] : [])));
   const settledBy = new Map<number, Set<string>>();
@@ -467,6 +482,7 @@ export function cursor(
     held,
     trusted,
     leads,
+    onDuty: () => duty !== null,
     keysByName,
     scopesByKey,
     scopeSets,
@@ -519,6 +535,8 @@ export function cursor(
     if (ignored(trust.get(m.seq)) || closedAsks.has(m.seq)) return false;
     if (m.permission)
       return !(settledBy.get(m.seq)?.has(m.from) || now > m.permission.expiresAt || (permReplies.get(m.seq) ?? []).some((r) => permissionAnswer(m, r, { trust, members, bySeq: permBySeq }) !== null));
+    const recorded = leadAsks.get(m.seq) ?? leadOwned.get(m.seq);
+    if (recorded) return !recorded.answer;
     const by = answered.get(m.seq);
     return !by || ![...by].some((n) => answersAsk(members, m, n));
   };
@@ -528,7 +546,9 @@ export function cursor(
     const who = members.get(name);
     return present(who) && !isPerson(who);
   };
-  const leadNow = (): string | null => leadOf(members, lead, signed, present);
+  const homeLead = (): string | null => leadOf(members, lead, signed, present);
+  const dutyLead = (home: string | null): string | null => (duty ? (present(members.get(duty.lead)) ? duty.lead : null) : home);
+  const leadNow = (): string | null => dutyLead(homeLead());
   const ownerHere = (): string | undefined => [...members.values()].find((x) => x.owner && x.active)?.name;
   const leadHere = (): string | undefined => leadNow() ?? ownerHere();
   const standsFor = (name: string): string | undefined => (present(members.get(name)) ? name : ownerHere());
@@ -736,11 +756,33 @@ export function cursor(
           for (const id of m.holds) tickTask(tasks.get(id), m.seq, at);
         }
       }
+      if (m.kind === "ask" || m.kind === "blocking") {
+        const onDuty = leadNow();
+        if (onDuty && m.from !== onDuty && m.to?.includes(onDuty) && readHandedOver(String(m.body ?? ""))?.from === m.from)
+          leadAsks.set(m.seq, { sentTo: onDuty, from: m.from, plain: !m.handoff && !m.step });
+        else if (
+          onDuty &&
+          m.from === onDuty &&
+          !m.permission &&
+          !m.check &&
+          m.to?.length &&
+          m.to.every((t) => {
+            const p = members.get(t);
+            return !!p && isPerson(p);
+          })
+        )
+          leadOwned.set(m.seq, { author: onDuty, to: [...m.to], esc: !!m.esc, plain: !m.handoff && !m.step });
+      }
       member.lastSeen = Math.max(member.lastSeen, at);
       if (!isOverlay(m)) member.messages++;
 
       for (const r of m.re ?? []) {
         if (!(r < m.seq)) continue;
+        const settles = m.kind !== "event" && (r > after || baseAsks.has(r)) && !closedAsks.has(r) && !ignored(trust.get(r)) && !typedOnly(m, r);
+        const handed = leadAsks.get(r);
+        if (settles && handed && !handed.answer && answersLeadAsk(members, handed, leadNow(), m.from)) leadAsks.set(r, { ...handed, answer: { by: m.from, seq: m.seq } });
+        const owned = leadOwned.get(r);
+        if (settles && owned && !owned.answer && answersLeadOwned(members, owned, m.from)) leadOwned.set(r, { ...owned, answer: { by: m.from, seq: m.seq, to: leadNow() ?? owned.author } });
         let set = answered.get(r);
         if (!set) answered.set(r, (set = new Set()));
         if (!typedOnly(m, r)) set.add(m.from);
@@ -837,6 +879,28 @@ export function cursor(
         else askHeads.set(head.id, { ...head, goal, goalBy: m.from });
         return;
       }
+      if (ev.op === "lead.standby") {
+        placeOf.set(m.seq, MAIN);
+        const target = members.get(ev.name);
+        if (!member.owner && !trusted(m.pk ?? "", member)) reject("only the owner or a person the owner trusts approves a standby lead");
+        else if (!ev.on) standbys.delete(ev.name);
+        else if (!present(target) || isPerson(target)) reject(`${ev.name} isn't an agent here`);
+        else standbys.set(ev.name, { since: m.seq, by: m.from });
+        return;
+      }
+      if (ev.op === "lead.duty") {
+        placeOf.set(m.seq, MAIN);
+        const current = duty?.since ?? 0;
+        const onDuty = leadNow();
+        const home = homeLead();
+        if (ev.from !== current) reject(`the lead on duty changed since you looked: hand over from the current assignment (${current ? `#${current}` : "the channel's own lead"})`);
+        else if (m.from !== onDuty && !member.owner && !trusted(m.pk ?? "", member)) reject("only the lead on duty, the owner or a person the owner trusts hands the lead over");
+        else if (ev.to !== home && !standbys.has(ev.to)) reject(`${ev.to} isn't an approved standby lead`);
+        else if (!present(members.get(ev.to))) reject(`${ev.to} isn't here`);
+        else if (ev.to === onDuty) reject(`${ev.to} is already the lead on duty`);
+        else duty = { lead: ev.to, since: m.seq, by: m.from };
+        return;
+      }
       if (ev.op === "specs.only.set") {
         placeOf.set(m.seq, MAIN);
         if (!member.owner) reject("only the owner says whether tasks come only from approved specs");
@@ -928,7 +992,14 @@ export function cursor(
     const keptThreads = recent(threadOf);
     const keptRoots = new Set(keptThreads.map(([, root]) => root));
     const keptSpecs = [...specs.values()].filter((sp) => !sp.result || !closedLongAgo(sp.result.at, hw));
-    const filedUnder = new Set([...tasks.values()].flatMap((t) => (t.ask !== undefined ? [t.ask] : [])).concat(keptSpecs.map((sp) => sp.ask)));
+    const filedUnder = new Set(
+      [...tasks.values()]
+        .map((t) => t.ask)
+        .concat(
+          keptSpecs.map((sp) => sp.ask),
+          ...holdsOf.values(),
+        ),
+    );
     keep?.(
       structuredClone({
         n: head,
@@ -998,6 +1069,10 @@ export function cursor(
         askHeads: [...askHeads.values()].filter((h) => h.id > cut || filedUnder.has(h.id)),
         specs: keptSpecs,
         specsOnly,
+        duty,
+        standbys: [...standbys],
+        leadAsks: [...leadAsks].filter(([seq, a]) => seq > cut || (a.answer?.seq ?? 0) > cut || openAsks.some((o) => o.seq === seq)),
+        leadOwned: [...leadOwned].filter(([seq, o]) => seq > cut || (o.answer?.seq ?? 0) > cut || openAsks.some((a) => a.seq === seq)),
         checks: [...checks.values()],
         answered: openAsks.flatMap((m): [number, string[]][] => [[m.seq, [...(answered.get(m.seq) ?? [])]]]),
         threadOf: keptThreads,
@@ -1031,10 +1106,15 @@ export function cursor(
       askHeads,
       specs,
       specsOnly,
+      duty,
+      standbys: new Map(standbys),
+      leadAsks: new Map(leadAsks),
+      leadOwned: new Map(leadOwned),
+      homeLead: theLead ?? null,
       checks,
       threadOf,
       threadPeople,
-      lead: theLead ?? null,
+      lead: dutyLead(theLead ?? null),
       rooms,
       secret,
       roomOf,
@@ -1158,6 +1238,11 @@ export function cursor(
     ctx,
     placesBefore,
     specsOnly,
+    duty,
+    standbys,
+    leadAsks,
+    leadOwned,
+    dutyLead,
     head,
     seen,
     forward,

@@ -36,7 +36,7 @@ import { bareHandleNote } from "../handles.ts";
 import { args, opt, unexpectedOptions } from "../args.ts";
 import { parseWhere } from "../where.ts";
 import { docPlaceOf } from "../../agent/docs.ts";
-import { type Command, die, noteRead, offlineOk, out, type Quit, session } from "../context.ts";
+import { type Command, die, noteRead, offlineOk, out, type Quit, readSession, session } from "../context.ts";
 import { attachments, firstLine, images, list, render, text } from "../input.ts";
 
 const LOG_DOC_MS = 5_000;
@@ -254,7 +254,7 @@ export const messageCommands: Record<string, Command> = {
     Effect.gen(function* () {
       const docTask = /^[Tt](\d+)$/.exec(args[1] ?? "");
       if (docTask || args[1] === "general") {
-        const s = yield* session();
+        const s = yield* readSession();
         const { state } = yield* s.state();
         const task = docTask ? Number(docTask[1]) : undefined;
         const name = task === undefined ? "#general" : `T${task}`;
@@ -266,7 +266,7 @@ export const messageCommands: Record<string, Command> = {
         return;
       }
       const link = messageAt(args[1] ?? "");
-      const s = yield* session(link?.code);
+      const s = yield* readSession(link?.code);
       const seq = link?.seq ?? (Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi show N|LINK [dir] | kiwi show N|LINK --raw")));
       const { messages, state } = yield* s.state();
       const found = yield* s.message(seq, messages);
@@ -302,7 +302,7 @@ export const messageCommands: Record<string, Command> = {
   log: () =>
     offlineOk(
       Effect.gen(function* () {
-        const s = yield* session();
+        const s = yield* readSession();
         const { messages: held, state } = yield* s.state();
         const room = opt.room === undefined ? undefined : yield* s.roomId(opt.room, state);
         const task = opt.task === undefined ? undefined : (parseTaskId(opt.task) ?? (yield* die(`no task ${opt.task}`)));
@@ -344,7 +344,7 @@ export const messageCommands: Record<string, Command> = {
         return 0;
       }
       const sql = (yield* text(1)) || (yield* die(USAGE));
-      const r = yield* sessionQuery(yield* session(), sql);
+      const r = yield* sessionQuery(yield* readSession(), sql);
       process.stdout.write(r.stdout);
       process.stderr.write(r.stderr);
       return r.exitCode;

@@ -59,7 +59,7 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
   const from = at;
   const peek = Cursor.of({ read: () => Effect.succeed(at), write: (_c, _a, seq) => Effect.sync(() => void (at = Math.max(at, seq))), seen: real.seen, markSeen: () => Effect.void });
   const got: Heard[] = [];
-  let seen: Pick<ChannelState, "openAsks"> | null = null;
+  let seen: Pick<ChannelState, "openAsks" | "leadAsks" | "lead"> | null = null;
   const hearing = s
     .listen(
       (m, state) =>

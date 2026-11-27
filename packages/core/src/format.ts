@@ -332,6 +332,10 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return say("spec.approve", { ask: String(ev.ask) });
     case "specs.only.set":
       return ev.on ? say("specs.only.on") : say("specs.only.off");
+    case "lead.standby":
+      return say(ev.on ? "lead.standby.on" : "lead.standby.off", { name: nameOf(ev.name) });
+    case "lead.duty":
+      return say("lead.duty", { name: nameOf(ev.to) });
     case "spec.result":
       return say(ev.verdict === "accepted" ? "spec.accepted" : ev.verdict === "back" ? "spec.back" : "spec.dropped", { ask: String(ev.ask), note: note(ev.note) });
     case "spec.delete":
@@ -762,7 +766,7 @@ function handedLines({ ask, handed }: Frozen<HandedAsk>, now: number): string[] 
   ];
 }
 
-export function handedNote(state: Pick<ChannelState, "openAsks">, me: string, mc: string, shown: readonly number[] = [], now = Date.now()): string | null {
+export function handedNote(state: Pick<ChannelState, "openAsks" | "leadAsks" | "lead">, me: string, mc: string, shown: readonly number[] = [], now = Date.now()): string | null {
   const handed = handedTo(state, me);
   const first = handed[0];
   if (!first || handed.every((h) => shown.includes(h.ask.seq))) return null;

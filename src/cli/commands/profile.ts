@@ -6,14 +6,14 @@ import { humanOf } from "@kiwi/core/state.ts";
 import { agentPrompt } from "../brief.ts";
 import { detectCard } from "../../card.ts";
 import { args, opt } from "../args.ts";
-import { agentName, channelAlias, type Command, config, die, keepDaemon, out, session } from "../context.ts";
+import { agentName, channelAlias, type Command, config, die, keepDaemon, out, readSession, session } from "../context.ts";
 import { list } from "../input.ts";
 
 export const profileCommands: Record<string, Command> = {
   color: () =>
     Effect.gen(function* () {
-      const s = yield* session();
       const [a, b] = args.slice(1);
+      const s = yield* a === undefined ? readSession() : session();
       if (!a) {
         const { state } = yield* s.state();
         const held = new Map([...state.members.values()].filter((m) => m.active && m.color).map((m) => [m.color!, m.name]));
@@ -48,9 +48,9 @@ export const profileCommands: Record<string, Command> = {
 
   prompt: () =>
     Effect.gen(function* () {
-      const alias = yield* channelAlias();
+      const alias = yield* channelAlias(undefined, "reads");
       const cfg = (yield* config).channels[alias];
-      const name = yield* agentName(cfg);
+      const name = yield* agentName(cfg, "reads");
       if (cfg) yield* keepDaemon;
       const state = cfg
         ? yield* Effect.flatMap(openSession(alias, cfg, name), (s) => s.state()).pipe(

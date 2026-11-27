@@ -11,9 +11,10 @@ import { leadCheckpointRefusal } from "@kiwi/core/reentry.ts";
 import { askRefusal, isPerson, taskSpecRefusal, leadCheckpointKey, mayNameGoal, openRound, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts";
 import { formatCandidates, reasonText } from "@kiwi/core/routing-text.ts";
-import { bindingFor } from "../../hooks.ts";
+import { seatsFor } from "../../hooks.ts";
+import { ownsSeat } from "../../seats.ts";
 import { args, opt } from "../args.ts";
-import { type Command, die, keepDaemon, offlineOk, out, session } from "../context.ts";
+import { type Command, declaredHere, die, keepDaemon, offlineOk, out, readSession, session } from "../context.ts";
 import { firstLine, readText, taskArg, text } from "../input.ts";
 import { landingFromOptions, taskLanded, taskSteps } from "./task-steps.ts";
 import { parseSpan, spanText } from "@kiwi/core/steps.ts";
@@ -33,10 +34,19 @@ const board = () =>
         const cfg = yield* keys.config;
         const aliases = Object.keys(cfg.channels).sort();
         if (!aliases.length) return yield* die("no channels yet (see: kiwi join)");
-        const me =
-          opt.as ?? process.env.KIWI_AS ?? bindingFor(process.cwd(), { claim: false })?.as ?? (yield* die("--global needs to know who you are: pass --as NAME, or run it from your bound folder"));
+        const named = opt.as ?? process.env.KIWI_AS;
+        const who = declaredHere();
+        const seatIn = (alias: string): string | undefined => {
+          const [only, ...more] = seatsFor(process.cwd(), { alias, claim: "own" }).filter((b) => b.alias === alias && ownsSeat(b, who));
+          return only && !more.length ? only.as : undefined;
+        };
+        const seated = aliases.flatMap((alias) => {
+          const me = named ?? seatIn(alias);
+          return me ? [{ alias, me }] : [];
+        });
+        if (!seated.length) return yield* die("--global needs to know who you are: pass --as NAME, or run it from your bound folder");
         yield* keepDaemon;
-        for (const alias of aliases) {
+        for (const { alias, me } of seated) {
           const c = cfg.channels[alias]!;
           if (!(yield* keys.identitiesIn(c.roomId)).includes(me)) continue;
           const sess = yield* openSession(alias, c, me);
@@ -54,7 +64,7 @@ const board = () =>
         }
         return;
       }
-      const s = yield* session();
+      const s = yield* readSession();
       const { state } = yield* s.state();
       out(formatTasks(state, reviewCheckOf(s.ch.roomId), { all: opt.all, owner: opt.mine ? s.me : opt.owner, now: Date.now() }));
     }),
@@ -65,8 +75,8 @@ export const taskCommands: Record<string, Command> = {
     oneLook(
       Effect.gen(function* () {
         if (!args[1] || args[1] === "list") return yield* board();
-        const s = yield* session();
         const sub = args[1];
+        const s = yield* sub === "show" || sub === "who" || (sub === "steps" && args[3] === undefined) ? readSession() : session();
         const STATE_FOR: Record<string, TaskState> = { start: "doing", review: "review", done: "done" };
         if (sub === "add") {
           const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || (yield* die("--ask takes a message number: --ask 18"));
@@ -104,11 +114,13 @@ export const taskCommands: Record<string, Command> = {
           const title = opt.file !== undefined ? args.slice(2).join(" ") : yield* text(2);
           if (!title.trim())
             return yield* die(
-              'usage: kiwi task add "title" --ask N|--from T…|--issue N [--body "the spec" | --file spec.md] [--owner NAME | --start] [--review NAME|any] [--then merge|release:tag|release:npm:PKG@RANGE|run|none|"a step" …] [--lander NAME]',
+              'usage: kiwi task add "title" --ask N|--from T…|--issue N [--body "the spec" | --file spec.md] [--owner NAME | --start] [--review NAME|any] [--then merge|release:tag|release:npm:PKG@RANGE|run|none|"a step" …] [--lander NAME] [--force]',
             );
           for (const gone of ["after", "needs"] as const)
             if (opt[gone] !== undefined) process.stderr.write(`kiwi: --${gone} is gone (tasks don't wait on or match anything now); put it in the body (--body)\n`);
           const { state: before } = yield* s.state();
+          const like = similarOpenTasks(before, title).map((t) => t.id);
+          if (like.length && !opt.force) return yield* die(`not added: "${title}" ${looksLikeLine(like)}, still open. If it's a different task, run the same command again with --force`);
           const id = yield* s.taskAdd(title, {
             owner: opt.owner,
             detail: body,
@@ -117,16 +129,15 @@ export const taskCommands: Record<string, Command> = {
             ...(from !== undefined ? { from } : {}),
             ...landing,
           });
-          const like = similarOpenTasks(before, title).map((t) => t.id);
           const lines = [`added ${taskId(id)}${yield* started(id)}`];
-          if (like.length) lines.push(looksLikeLine(like));
+          if (like.length) lines.push(`added anyway (--force): ${looksLikeLine(like)}`);
           const { state: added } = yield* s.state();
           const ask = added.tasks.get(id)?.ask;
           if (opt.goal !== undefined) {
             if (ask === undefined) lines.push(`no goal named: ${taskId(id)} isn't filed under a person's message`);
             else lines.push(`goal of #${ask}: ${(yield* s.nameGoal(ask, opt.goal)).goal}`);
           } else if (ask !== undefined && !added.askHeads.get(ask)?.goal && mayNameGoal(added, s.me, added.askHeads.get(ask)!))
-            lines.push(`#${ask} has no goal yet: name it in plain words for the board, kiwi goal ${ask} "0.27.7: …"`);
+            lines.push(`hint: #${ask} has no goal yet. The task is added; to name a goal for the board: kiwi goal ${ask} "0.27.7: …"`);
           return out(lines.join("\n"));
         }
         if (sub === "checkpoint" && args[2] === "lead") {

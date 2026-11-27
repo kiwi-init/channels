@@ -1,7 +1,7 @@
 // Seats: which agent a command or hook acts for, with no -c/--as. Several agents can work from one
 // checkout; a session finds its own seat, a restart takes its old one back, and a second live agent
 // never acts as the first.
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -640,5 +640,74 @@ describe("a session whose seat another session took learns it once (#1676)", () 
     bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "lead-session", pid: DEAD });
     seatsFor(dir, { who: stranger });
     expect(loadConfig().taken?.map((t) => `${t.as}:${t.from}`)).toEqual(["lead:lead-session"]);
+  });
+});
+
+describe("a session that is already an agent never takes another agent's seat (#2688)", () => {
+  const worker = { harness: "claude" as const, session: "worker-session", pid: process.pid };
+  const seated = () => {
+    const repo = join(dir, "repo");
+    mkdirSync(repo);
+    bindDirectory(repo, { alias: "ch", as: "worker", harness: "claude", session: "worker-session", pid: process.pid });
+    bindDirectory(dir, { alias: "other", as: "sleeper", harness: "claude", session: "gone-session", pid: DEAD });
+    return repo;
+  };
+
+  test("a seat of another channel in a parent folder, whose session is gone, stays its own", () => {
+    const repo = seated();
+    const before = structuredClone(loadConfig().bindings);
+    expect(seatsFor(repo, { who: worker, room: "room2" }).filter((b) => b.alias === "other")).toEqual([]);
+    expect(seatsFor(repo, { who: worker, alias: "other" })).toEqual([]);
+    expect(loadConfig().bindings).toEqual(before);
+    expect(loadConfig().taken).toBeUndefined();
+    expect(loadConfig().took).toBeUndefined();
+  });
+
+  test("a restarted agent that holds no seat still takes its old seat back", () => {
+    const repo = seated();
+    const restarted = { harness: "claude" as const, session: "restarted", pid: process.pid };
+    expect(seatsFor(repo, { who: restarted, alias: "other" }).map((b) => `${b.as}:${b.session}`)).toEqual(["sleeper:restarted"]);
+    expect(loadConfig().taken?.map((t) => `${t.as}:${t.from}`)).toEqual(["sleeper:gone-session"]);
+  });
+
+  test("a read finds the seat without taking it", () => {
+    const repo = seated();
+    const before = structuredClone(loadConfig().bindings);
+    const restarted = { harness: "claude" as const, session: "restarted", pid: process.pid };
+    expect(seatsFor(repo, { who: restarted, alias: "other", claim: "own" }).map((b) => `${b.as}:${b.session}`)).toEqual(["sleeper:gone-session"]);
+    expect(loadConfig().bindings).toEqual(before);
+    expect(loadConfig().taken).toBeUndefined();
+  });
+});
+
+describe("a read keeps only the reader's own seat fresh (#2688)", () => {
+  const codex = { harness: "codex" as const, session: "thread-1" };
+  const other = { harness: "codex" as const, session: "thread-2" };
+  const T0 = new Date("2026-11-27T12:00:00Z");
+
+  afterEach(() => setSystemTime());
+
+  test("an active session with no process to check stays held past the stale threshold by reading", () => {
+    setSystemTime(T0);
+    bindDirectory(dir, { alias: "ch", as: "codex", harness: "codex", session: "thread-1" });
+    setSystemTime(new Date(T0.getTime() + 11 * 3600_000));
+    expect(seatsFor(dir, { who: codex, claim: "own" }).map((b) => b.as)).toEqual(["codex"]);
+    setSystemTime(new Date(T0.getTime() + 13 * 3600_000));
+    expect(seatsFor(dir, { who: other })).toEqual([]);
+    expect(seatsAt(loadConfig(), dir)[0]).toMatchObject({ session: "thread-1" });
+  });
+
+  test("without that read, the seat goes stale and a restart takes it", () => {
+    setSystemTime(T0);
+    bindDirectory(dir, { alias: "ch", as: "codex", harness: "codex", session: "thread-1" });
+    setSystemTime(new Date(T0.getTime() + 13 * 3600_000));
+    expect(seatsFor(dir, { who: other }).map((b) => b.session)).toEqual(["thread-2"]);
+  });
+
+  test("a read by a resumed session leaves its seat's process alone", () => {
+    bindDirectory(dir, { alias: "ch", as: "lead", harness: "claude", session: "lead-session", pid: DEAD });
+    const before = seatsAt(loadConfig(), dir)[0];
+    seatsFor(dir, { who: { harness: "claude", session: "lead-session", pid: process.pid }, claim: "own" });
+    expect(seatsAt(loadConfig(), dir)[0]).toEqual(before);
   });
 });

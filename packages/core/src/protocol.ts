@@ -404,7 +404,9 @@ export type Event =
   | { op: "spec.unready"; ask: number; v: number }
   | { op: "spec.result"; ask: number; verdict: SpecVerdict; note?: string }
   | { op: "spec.delete"; ask: number; why?: string }
-  | { op: "specs.only.set"; on: boolean };
+  | { op: "specs.only.set"; on: boolean }
+  | { op: "lead.standby"; name: string; on: boolean }
+  | { op: "lead.duty"; to: string; from: number };
 
 export type SpecVerdict = "accepted" | "back" | "dropped";
 
@@ -1004,7 +1006,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 32;
+export const EVENT_OPS_VERSION = 33;
 
 export const TASK_WAIT_REASON_MAX = 200;
 
@@ -1038,7 +1040,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 30;
+export const FOLD_RULES = 33;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -1444,6 +1446,10 @@ function eventCheck(ev: unknown): boolean | null {
       return n(e.ask) && (e.ask as number) > 0 && opt(e.why, (x): x is string => str(x, MAX_SPEC_NOTE));
     case "specs.only.set":
       return typeof e.on === "boolean";
+    case "lead.standby":
+      return str(e.name, 64) && typeof e.on === "boolean";
+    case "lead.duty":
+      return str(e.to, 64) && n(e.from);
     case "spec.result":
       return (
         n(e.ask) &&
