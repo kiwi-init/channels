@@ -1,25 +1,28 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import type { Event, Message } from "@kiwi/core/protocol.ts";
+import { baseFromWire, BASE_WIRE_VERSION, toWire } from "@kiwi/core/base-wire.ts";
 import { fold, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { dutyLines } from "../src/cli/commands/lead.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
 const T0 = 1_000_000;
-async function ev(from: string, e: Event): Promise<Message> {
+async function ev(from: string, e: Event, key = from): Promise<Message> {
   const n = ++seq;
   const base = { v: 1 as const, id: crypto.randomUUID(), from, kind: "event" as const, body: "", ev: e, ts: T0 + n };
-  const p = await sign(ids[from]!, base);
+  const p = await sign(ids[key]!, base);
   return { ...p, seq: n, rts: T0 + n, sigOk: await verify(p) };
 }
 
 let roster: Roster;
 beforeAll(async () => {
   for (const n of ["jon", "ana", "bo", "lead", "spare", "dev"]) ids[n] = await generateIdentity(n);
+  ids.anaPhone = await generateIdentity("ana");
   roster = [
     { name: "jon", pk: ids.jon!.pk, owner: true, at: 0, active: true, kind: "human" },
     { name: "ana", pk: ids.ana!.pk, owner: false, at: 1, active: true, kind: "human" },
+    { name: "ana", pk: ids.anaPhone!.pk, owner: false, at: 1, active: true, kind: "human" },
     { name: "bo", pk: ids.bo!.pk, owner: false, at: 2, active: true, kind: "human" },
     { name: "lead", pk: ids.lead!.pk, owner: false, at: 3, active: true, kind: "agent" },
     { name: "spare", pk: ids.spare!.pk, owner: false, at: 4, active: true, kind: "agent" },
@@ -68,6 +71,21 @@ describe("standby approval", () => {
     const s = fold([...log, toSpare, withdraw], roster, now());
     expect(s.lead).toBe("spare");
     expect(s.standbys.has("spare")).toBe(false);
+  });
+});
+
+describe("a person's powers are checked on the key that signed", () => {
+  test("a trusted person's other key, or a key made read-only, doesn't approve a standby or hand over", async () => {
+    const log = await channel();
+    const fromPhone = await ev("ana", { op: "lead.standby", name: "dev", on: true }, "anaPhone");
+    const handFromPhone = await ev("ana", { op: "lead.duty", to: "spare", from: 0 }, "anaPhone");
+    expect(rejected([...log, fromPhone], fromPhone)).toContain("only the owner or a person the owner trusts");
+    expect(rejected([...log, handFromPhone], handFromPhone)).toContain("only the lead on duty, the owner or a person the owner trusts");
+    const readOnly = await ev("jon", { op: "scope.set", member: "ana", pk: ids.ana!.pk, scopes: [] });
+    const afterScope = await ev("ana", { op: "lead.standby", name: "dev", on: true });
+    expect(rejected([...log, readOnly, afterScope], afterScope)).toBeDefined();
+    const fromLaptop = await ev("ana", { op: "lead.standby", name: "dev", on: true });
+    expect(fold([...log, fromLaptop], roster, now()).standbys.has("dev")).toBe(true);
   });
 });
 
@@ -172,10 +190,41 @@ describe("assignment follows the duty", () => {
     for (const ok of [byStandby, byPerson, selfClaim]) expect(fold([...log, task, out, ok], roster, now()).tasks.get(task.seq)?.owner).toBe("dev");
   });
 
+  test("a former lead that owns a task can drop it but not give it to another seat", async () => {
+    const log = await channel();
+    const task = await ev("lead", { op: "task.add", title: "mine", owner: "lead" });
+    const out = await ev("lead", { op: "lead.duty", to: "spare", from: 0 });
+    const give = await ev("lead", { op: "task.update", task: task.seq, owner: "dev" });
+    const drop = await ev("lead", { op: "task.update", task: task.seq, owner: "" });
+    expect(rejected([...log, task, out, give], give)).toBe("only the lead on duty or a person gives a task to dev");
+    const s = fold([...log, task, out, drop], roster, now());
+    expect(s.rejected.has(drop.seq)).toBe(false);
+    expect(s.tasks.get(task.seq)?.owner).toBeUndefined();
+  });
+
   test("with no handover, assignment works as it does today", async () => {
     const log = await channel();
     const task = await ev("dev", { op: "task.add", title: "ship it" });
     const byAgent = await ev("spare", { op: "task.update", task: task.seq, owner: "dev" });
     expect(fold([...log, task, byAgent], roster, now()).tasks.get(task.seq)?.owner).toBe("dev");
+  });
+});
+
+describe("the duty in a snapshot", () => {
+  test("a snapshot carries the duty and the standbys across the wire, and a malformed one is refused", async () => {
+    const log = await channel();
+    const out = await ev("lead", { op: "lead.duty", to: "spare", from: 0 });
+    const base = baseOf([...log, out]);
+    const wire = JSON.parse(JSON.stringify(toWire(base))) as Record<string, unknown>;
+    const back = baseFromWire(wire);
+    expect(back?.duty).toEqual({ lead: "spare", since: out.seq, by: "lead" });
+    expect(back?.standbys).toEqual([["spare", { since: log.at(-1)!.seq, by: "jon" }]]);
+    const legacy = { ...wire };
+    delete legacy.duty;
+    delete legacy.standbys;
+    expect(baseFromWire(legacy)).not.toBeNull();
+    for (const duty of [{ lead: 5, since: 1, by: "x" }, { lead: "spare", since: -1, by: "x" }, { lead: "spare", since: 1 }, "spare"]) expect(baseFromWire({ ...wire, duty })).toBeNull();
+    for (const standbys of [{}, [["spare"]], [["spare", { since: "1", by: "jon" }]], [[7, { since: 1, by: "jon" }]]]) expect(baseFromWire({ ...wire, standbys })).toBeNull();
+    expect(BASE_WIRE_VERSION).toBeGreaterThan(0);
   });
 });

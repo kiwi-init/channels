@@ -63,7 +63,7 @@ const managesAgent = (holds: boolean, by: FoldMember, target: FoldMember | undef
 function assignRefusal(c: Pick<FoldCtx, "leads" | "onDuty">, member: FoldMember, from: string, owner: string | undefined, next: string | null | undefined): string | null {
   if (!c.onDuty() || next === undefined || isPerson(member) || c.leads(member)) return null;
   const to = next || undefined;
-  if (to === owner || to === from || owner === from) return null;
+  if (to === owner || to === from || (to === undefined && owner === from)) return null;
   return to ? `only the lead on duty or a person gives a task to ${to}` : "only the lead on duty or a person takes a task off its owner";
 }
 

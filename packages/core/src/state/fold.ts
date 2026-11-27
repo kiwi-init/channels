@@ -851,7 +851,7 @@ export function cursor(
       if (ev.op === "lead.standby") {
         placeOf.set(m.seq, MAIN);
         const target = members.get(ev.name);
-        if (!member.owner && !trusted(member.pk, member)) reject("only the owner or a person the owner trusts approves a standby lead");
+        if (!member.owner && !trusted(m.pk ?? "", member)) reject("only the owner or a person the owner trusts approves a standby lead");
         else if (!ev.on) standbys.delete(ev.name);
         else if (!present(target) || isPerson(target)) reject(`${ev.name} isn't an agent here`);
         else standbys.set(ev.name, { since: m.seq, by: m.from });
@@ -863,7 +863,7 @@ export function cursor(
         const onDuty = leadNow();
         const home = homeLead();
         if (ev.from !== current) reject(`the lead on duty changed since you looked: hand over from the current assignment (${current ? `#${current}` : "the channel's own lead"})`);
-        else if (m.from !== onDuty && !member.owner && !trusted(member.pk, member)) reject("only the lead on duty, the owner or a person the owner trusts hands the lead over");
+        else if (m.from !== onDuty && !member.owner && !trusted(m.pk ?? "", member)) reject("only the lead on duty, the owner or a person the owner trusts hands the lead over");
         else if (ev.to !== home && !standbys.has(ev.to)) reject(`${ev.to} isn't an approved standby lead`);
         else if (!present(members.get(ev.to))) reject(`${ev.to} isn't here`);
         else if (ev.to === onDuty) reject(`${ev.to} is already the lead on duty`);

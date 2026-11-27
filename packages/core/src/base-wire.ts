@@ -137,6 +137,29 @@ export function fromWire({ oldSent, github, ...w }: Wire): FoldBase {
   };
 }
 
+const seqOk = (x: unknown): boolean => Number.isSafeInteger(x) && (x as number) >= 0;
+
+const nameOk = (x: unknown): boolean => typeof x === "string" && x.length > 0 && x.length <= 64;
+
+function wellFormedDuty(x: unknown): boolean {
+  if (x === undefined || x === null) return true;
+  if (typeof x !== "object") return false;
+  const d = x as Record<string, unknown>;
+  return nameOk(d.lead) && seqOk(d.since) && nameOk(d.by);
+}
+
+function wellFormedStandbys(x: unknown): boolean {
+  if (x === undefined) return true;
+  return (
+    Array.isArray(x) &&
+    x.every((e) => {
+      if (!Array.isArray(e) || e.length !== 2 || !nameOk(e[0]) || !e[1] || typeof e[1] !== "object") return false;
+      const s = e[1] as Record<string, unknown>;
+      return seqOk(s.since) && nameOk(s.by);
+    })
+  );
+}
+
 export function wellFormedWire(x: unknown, n: number): x is Wire {
   if (!x || typeof x !== "object") return false;
   const b = x as Record<string, unknown>;
@@ -153,7 +176,9 @@ export function wellFormedWire(x: unknown, n: number): x is Wire {
     (b.branchPrefix === undefined || b.branchPrefix === null || typeof b.branchPrefix === "string") &&
     (b.quietMs === undefined || (typeof b.quietMs === "number" && quietMinutes(b.quietMs / 60_000))) &&
     (b.landing === undefined || b.landing === null || isLanding(b.landing)) &&
-    (b.landingSteps === undefined || b.landingSteps === null || wellFormedStepSpecs(b.landingSteps))
+    (b.landingSteps === undefined || b.landingSteps === null || wellFormedStepSpecs(b.landingSteps)) &&
+    wellFormedDuty(b.duty) &&
+    wellFormedStandbys(b.standbys)
   );
 }
 
