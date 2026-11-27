@@ -54,3 +54,28 @@ describe("the app's card for an ask the lead put to a person keeps the accepted 
     expect(card).toMatchObject({ kind: "question", answer: { by: "bo", seq: 6 } })
   })
 })
+
+describe("tap-to-answer doesn't rewrite a lead ask's card", () => {
+  const ask = wire(3, "lead", { kind: "ask", body: "Ship 2.0 today?", to: ["jow"], esc: true })
+  const out = ev(4, "lead", { op: "lead.duty", to: "spare", from: 0 })
+  const cardOf = (wires: Wire[]) => asksOf(fold(wires, roster, 100_000), wires, "jow", true, [], roster, new Map()).asks.find((a) => a.id === "3")
+
+  test("an answer typed before tap-only was turned on stays the settled answer after it", () => {
+    const typed = wire(5, "jow", { body: "yes", re: [3], to: ["lead"] })
+    const tap = ev(6, "jow", { op: "asks.tap.set", on: true })
+    const wires = [...setup, ask, out, typed, tap]
+    expect(fold(wires, roster, 100_000).leadOwned.get(3)?.answer).toEqual({ by: "jow", seq: 5, to: "spare" })
+    expect(cardOf(wires)).toMatchObject({ answer: { by: "jow", seq: 5 } })
+    expect(cardOf(wires)).not.toHaveProperty("typed")
+  })
+
+  test("with tap-only on first, a typed reply leaves the card pending and shows as the typed hint", () => {
+    const tap = ev(5, "jow", { op: "asks.tap.set", on: true })
+    const typed = wire(6, "jow", { body: "yes", re: [3], to: ["lead"] })
+    const wires = [...setup, ask, out, tap, typed]
+    expect(fold(wires, roster, 100_000).leadOwned.get(3)?.answer).toBeUndefined()
+    const card = cardOf(wires)
+    expect(card).not.toHaveProperty("answer")
+    expect(card).toMatchObject({ typed: { by: "jow", seq: 6 } })
+  })
+})

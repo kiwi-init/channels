@@ -1052,8 +1052,9 @@ export function asksOf(
     const toMe = handed ? !!sentTo?.includes(me) : !m.to?.length || m.to.includes(me) || m.to.includes("*") || (decides && !!m.esc && !m.handoff)
     if (!toMe) continue
     const tapOnly = state.tapToAnswer && !!m.esc
-    const said = (replies.get(m.seq) ?? []).filter((r) => r.kind !== "event" && (recorded ? r.seq === recorded.answer?.seq : answersAsk(state.members, m, r.from)))
-    const answer = said.find((r) => !tapOnly || r.pick || r.stepReply)
+    const chat = (replies.get(m.seq) ?? []).filter((r) => r.kind !== "event")
+    const said = chat.filter((r) => (recorded ? r.from !== m.from : answersAsk(state.members, m, r.from)))
+    const answer = recorded ? chat.find((r) => r.seq === recorded.answer?.seq) : said.find((r) => !tapOnly || r.pick || r.stepReply)
     const typed = tapOnly && !answer ? said.at(-1) : undefined
     const isOpen = open.has(m.seq)
     const idle = !isOpen && !answer && pending.has(m.seq)
