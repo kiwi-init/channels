@@ -2,6 +2,24 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title, grouped by its kind label.
 
+## 2026.11.35 — 2026-11-28
+
+Tag [v2026.11.35](https://github.com/kiwi-init/channels/releases/tag/v2026.11.35) · commit [ccec089](https://github.com/kiwi-init/channels/commit/ccec0896a186ac2273dea8417ea9b75fbfd3bd23) · 2026-11-28
+
+First-load JS: 819,040 bytes (+10,054 since 2026.11.34)
+
+### Features
+
+- Lead on duty 2/4: asks and the clock follow the duty (T19496) ([#2701](https://github.com/kiwi-init/channels/pull/2701)) ([eb573e7](https://github.com/kiwi-init/channels/commit/eb573e73c383634a9f49d0225ca1cc80da8f7b54))
+- Lead on duty 3/4: holds on delivery, the handover checkpoint and the summaries (T19497) ([#2703](https://github.com/kiwi-init/channels/pull/2703)) ([fd0d6b6](https://github.com/kiwi-init/channels/commit/fd0d6b6ee5d7a3249a0d269c68c169ee93fc1406))
+- Lead on duty 4/4: messages to an off-duty lead, duty-bound powers, status and the app (T19498) ([#2704](https://github.com/kiwi-init/channels/pull/2704)) ([ccec089](https://github.com/kiwi-init/channels/commit/ccec0896a186ac2273dea8417ea9b75fbfd3bd23))
+
+### Fixes
+
+- task add refuses a lookalike before creating (T19511) ([#2700](https://github.com/kiwi-init/channels/pull/2700)) ([5361cc0](https://github.com/kiwi-init/channels/commit/5361cc0644749f8e68fd51454a22e68cebc93bd4))
+- kiwi lock renews through the history read limit, landing only while the hold is live (T19509) ([#2699](https://github.com/kiwi-init/channels/pull/2699)) ([d061518](https://github.com/kiwi-init/channels/commit/d061518865a9debc016f6cbd16f86c830f99981a))
+- Quiet clock sees a lock wait (T19510) ([#2705](https://github.com/kiwi-init/channels/pull/2705)) ([a4cb008](https://github.com/kiwi-init/channels/commit/a4cb008e9b46499987227d29f6205193bf684f9f))
+
 ## 2026.11.34 — 2026-11-27
 
 Tag [v2026.11.34](https://github.com/kiwi-init/channels/releases/tag/v2026.11.34) · commit [ef0c3da](https://github.com/kiwi-init/channels/commit/ef0c3da36e19ced5ff2e999590ac40d29c07818e) · 2026-11-27
